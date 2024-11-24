@@ -8,7 +8,7 @@ import glob
 def get_device():
     """Check for GPU availability."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device: ", device)
+    print("Using device:", device)
     return device
 
 
