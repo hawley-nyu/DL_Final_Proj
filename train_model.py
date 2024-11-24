@@ -26,5 +26,5 @@ if __name__ == "__main__":
     device = get_device()
     train_ds = load_data(device)
     for batch in train_ds:
-        print(batch)
+        print(batch.shape)
         break
