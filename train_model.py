@@ -32,7 +32,8 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
     criterion = torch.nn.MSELoss()
-    num_epochs = 10
+    num_epochs = 3
+    progress_bar = tqdm(range(num_epochs * len(train_dataloader)))
     for epoch in tqdm(range(num_epochs)):
         epoch_loss = 0
         model.train()
@@ -46,6 +47,6 @@ if __name__ == "__main__":
             loss.backward()
             # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
-
+            progress_bar.update(1)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
         
