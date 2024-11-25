@@ -1,6 +1,7 @@
 from dataset import create_wall_dataloader
 from my_model import JEPA
 import torch
+from tqdm import tqdm
 
 def get_device():
     """Check for GPU availability."""
@@ -26,24 +27,25 @@ def load_data(device):
 
 if __name__ == "__main__":
     device = get_device()
-    train_ds = load_data(device)
+    train_dataloader = load_data(device)
     model = JEPA().to(device)
-    for batch in train_ds:
-        state = batch.states
-        action = batch.actions
-        print(state.shape)
-        print(action.shape)
 
-        # print("test encoder")
-        # print(state[:, 0].shape)
-        # hidden_state = encoder(state[:, 0])
-        # print(hidden_state.shape)
+    optimizer = torch.AdamW(model.parameters(), lr=5e-5)
+    criterion = torch.nn.MSE()
+    num_epochs = 10
+    for epoch in tqdm(range(num_epochs)):
+        epoch_loss = 0
+        model.train()
+        for batch in train_dataloader:
 
-        # print("test predictor")
-        # print(action[:, 0].shape)
-        # prediction = predictor(hidden_state, action[:, 0])
-        # print(prediction.shape)
-        encoded_states, predicted_states = model(state, action)
-        print(encoded_states.shape)
-        print(predicted_states.shape)
-        break
+            encoded_states, predicted_states = model(batch.states, batch.actions)
+            loss = criterion(predicted_states, encoded_states[1:])
+            epoch_loss += loss.item()
+
+            optimizer.zero_grad()
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+        
