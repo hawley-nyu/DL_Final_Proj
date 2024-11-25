@@ -30,7 +30,7 @@ if __name__ == "__main__":
     train_dataloader = load_data(device)
     model = JEPA().to(device)
 
-    optimizer = torch.AdamW(model.parameters(), lr=5e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
     criterion = torch.nn.MSE()
     num_epochs = 10
     for epoch in tqdm(range(num_epochs)):
