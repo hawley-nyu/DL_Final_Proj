@@ -30,8 +30,8 @@ def vicreg_loss(embeddings, target_embeddings, gamma=1.0, epsilon=1e-4, lambda_=
     VICReg-inspired loss function to prevent representation collapse.
 
     Args:
-        embeddings (torch.Tensor): Predicted embeddings, shape (batch_size, dim).
-        target_embeddings (torch.Tensor): Target embeddings, shape (batch_size, dim).
+        embeddings (torch.Tensor): Predicted embeddings, shape (T, BS, D).
+        target_embeddings (torch.Tensor): Target embeddings, shape (T, BS, D).
         gamma (float): Target variance threshold.
         epsilon (float): Small constant to prevent numerical instability.
         lambda_ (float): Weight for invariance loss.
@@ -41,6 +41,10 @@ def vicreg_loss(embeddings, target_embeddings, gamma=1.0, epsilon=1e-4, lambda_=
     Returns:
         torch.Tensor: Total loss.
     """
+    # Flatten embeddings to shape (T * BS, D)
+    embeddings = embeddings.view(-1, embeddings.size(-1))  # (T * BS, D)
+    target_embeddings = target_embeddings.view(-1, target_embeddings.size(-1))  # (T * BS, D)
+
     # Invariance Loss
     invariance_loss = F.mse_loss(embeddings, target_embeddings)
 
@@ -52,8 +56,8 @@ def vicreg_loss(embeddings, target_embeddings, gamma=1.0, epsilon=1e-4, lambda_=
     # Covariance Regularization
     embeddings_centered = embeddings - embeddings.mean(dim=0)
     cov_matrix = (embeddings_centered.T @ embeddings_centered) / (batch_size - 1)
-    off_diagonal = cov_matrix.fill_diagonal_(0)
-    covariance_loss = (off_diagonal ** 2).sum() / dim
+    cov_matrix.fill_diagonal_(0)  # Ignore diagonal elements
+    covariance_loss = (cov_matrix ** 2).sum() / dim
 
     # Total Loss
     total_loss = lambda_ * invariance_loss + mu * variance_loss + nu * covariance_loss
