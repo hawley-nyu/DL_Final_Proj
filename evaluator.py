@@ -113,9 +113,8 @@ class ProbingEvaluator:
                 ################################################################################
                 # TODO: Forward pass through your model
                 encoded_states, predicted_states = model(batch.states, batch.actions)
-                pred_encs = encoded_states
-                # pred_encs = model(batch.states, batch.actions)
-                # pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
+                initial_state = encoded_states[0].unsqueeze(0)  # Take the initial state (T=0) and reshape to (1, BS, D)
+                pred_locs = torch.cat([initial_state, predicted_states], dim=0)
 
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
@@ -212,7 +211,8 @@ class ProbingEvaluator:
             ################################################################################
             # TODO: Forward pass through your model
             encoded_states, predicted_states = model(batch.states, batch.actions)
-            pred_encs = encoded_states
+            initial_state = encoded_states[0].unsqueeze(0)  # Take the initial state (T=0) and reshape to (1, BS, D)
+            pred_locs = torch.cat([initial_state, predicted_states], dim=0)
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
