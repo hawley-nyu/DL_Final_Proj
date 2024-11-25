@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
     # criterion = torch.nn.MSELoss()
-    num_epochs = 3
+    num_epochs = 8
     progress_bar = tqdm(range(num_epochs * len(train_dataloader)))
     for epoch in tqdm(range(num_epochs)):
         epoch_loss = 0
