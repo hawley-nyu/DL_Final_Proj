@@ -43,7 +43,7 @@ class Encoder(nn.Module):
         self.linear_block = nn.Sequential(
             nn.Linear(16 * 16 * 16, 512),
             nn.ReLU(),
-            nn.Linear(512, 256)
+            nn.Linear(512, 128)
         )
         
 
@@ -60,7 +60,7 @@ class Encoder(nn.Module):
         x = self.conv_block4(x) # (bs, 32, 32, 32)
         x = x + identity # (bs, 32, 32, 32)
         x = self.conv_block5(x) # (bs, 16, 16, 16)
-        x = self.linear_block(x.view(bs, -1)) # (bs, 256)
+        x = self.linear_block(x.view(bs, -1)) # (bs, 128)
         return x
     
 
@@ -71,15 +71,15 @@ class Predictor(nn.Module):
         super(Predictor, self).__init__()
 
         self.action_embedding = nn.Sequential(
-            nn.Linear(2, 16),
+            nn.Linear(2, 32),
             nn.ReLU()
         )
         self.linear_block = nn.Sequential(
-            nn.Linear(256 + 16, 512),
+            nn.Linear(128 + 32, 256),
             nn.LeakyReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(256, 512),
             nn.LeakyReLU(),
-            nn.Linear(512, 256)
+            nn.Linear(512, 128)
         )
     
     def forward(self, state, action):
@@ -98,7 +98,7 @@ class JEPA(nn.Module):
         super(JEPA, self).__init__()
         self.encoder = Encoder()
         self.predictor = Predictor()
-        self.repr_dim = 256
+        self.repr_dim = 128
 
     def forward(self, states, actions):
         """
@@ -111,7 +111,7 @@ class JEPA(nn.Module):
 
         reshaped_states = states.view(bs * trajectory_length, 2, 65, 65) # (bs * 17, 2, 65, 65)
         encoded_states = self.encoder(reshaped_states) # (bs * 17, 256)
-        encoded_states = encoded_states.view(bs, trajectory_length, 256).permute(1, 0, 2) # (17, bs, 256)
+        encoded_states = encoded_states.view(bs, trajectory_length, 128).permute(1, 0, 2) # (17, bs, 256)
 
         predicted_states = []
         for i in range(trajectory_length - 1):
