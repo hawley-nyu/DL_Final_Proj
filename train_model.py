@@ -31,7 +31,7 @@ if __name__ == "__main__":
     model = JEPA().to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
-    criterion = torch.nn.MSE()
+    criterion = torch.nn.MSELoss()
     num_epochs = 10
     for epoch in tqdm(range(num_epochs)):
         epoch_loss = 0
