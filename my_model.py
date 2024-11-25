@@ -74,11 +74,13 @@ class Predictor(nn.Module):
             nn.Linear(2, 16),
             nn.ReLU()
         )
-
-        self.fc1 = nn.Linear(256 + 16, 512)
-        self.fc2 = nn.Linear(512, 512)
-        self.fc3 = nn.Linear(512, 256)
-        self.leaky_relu = nn.LeakyReLU()
+        self.linear_block = nn.Sequential(
+            nn.Linear(256 + 16, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 256)
+        )
     
     def forward(self, state, action):
         """
@@ -88,11 +90,7 @@ class Predictor(nn.Module):
         """
         action = self.action_embedding(action) # (bs, 16)
         x = torch.cat([state, action], dim=1) # (bs, 256 + 16)
-        x = self.fc1(x) # (bs, 512)
-        x = self.leaky_relu(x) # (bs, 512)
-        x = self.fc2(x) # (bs, 512)
-        x = self.leaky_relu(x) # (bs, 512)
-        x = self.fc3(x) # (bs, 256)
+        x = self.linear_block(x) # (bs, 256)
         return x
 
 class JEPA(nn.Module):
