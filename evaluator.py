@@ -112,8 +112,10 @@ class ProbingEvaluator:
             for batch in tqdm(dataset, desc="Probe prediction step"):
                 ################################################################################
                 # TODO: Forward pass through your model
-                pred_encs = model(states=batch.states, actions=batch.actions)
-                pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
+                encoded_states, predicted_states = model(batch.states, batch.actions)
+                pred_encs = encoded_states
+                # pred_encs = model(batch.states, batch.actions)
+                # pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
 
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
@@ -209,9 +211,8 @@ class ProbingEvaluator:
         for idx, batch in enumerate(tqdm(val_ds, desc="Eval probe pred")):
             ################################################################################
             # TODO: Forward pass through your model
-            pred_encs = model(states=batch.states, actions=batch.actions)
-            # # BS, T, D --> T, BS, D
-            pred_encs = pred_encs.transpose(0, 1)
+            encoded_states, predicted_states = model(batch.states, batch.actions)
+            pred_encs = encoded_states
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
