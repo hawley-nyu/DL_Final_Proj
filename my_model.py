@@ -63,6 +63,7 @@ class JEPA(nn.Module):
         super(JEPA, self).__init__()
         self.encoder = Encoder()
         self.predictor = Predictor()
+        self.repr_dim = 128
 
     def forward(self, states, actions):
         """
@@ -82,6 +83,6 @@ class JEPA(nn.Module):
             prediction = self.predictor(encoded_states[i], actions[:, i]) # (bs, 128)
             predicted_states.append(prediction)
         predicted_states = torch.stack(predicted_states, dim=0)  # (16, bs, 128)
-        
+
         return encoded_states, predicted_states
 
