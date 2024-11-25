@@ -38,7 +38,6 @@ default_config = ProbingConfig()
 
 
 def location_losses(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    print(target.shape, pred.shape)
     assert pred.shape == target.shape
     mse = (pred - target).pow(2).mean(dim=0)
     return mse
@@ -213,7 +212,7 @@ class ProbingEvaluator:
             ################################################################################
             # TODO: Forward pass through your model
             encoded_states, predicted_states = model(batch.states, batch.actions)
-            pred_encs = predicted_states
+            pred_encs = encoded_states
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
