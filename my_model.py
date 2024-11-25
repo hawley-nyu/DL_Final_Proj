@@ -58,3 +58,30 @@ class Predictor(nn.Module):
         x = self.fc3(x) # (bs, 128)
         return x
 
+class JEPA(nn.Module):
+    def __init__(self):
+        super(JEPA, self).__init__()
+        self.encoder = Encoder()
+        self.predictor = Predictor()
+
+    def forward(self, states, actions):
+        """
+        Input states:  (bs, 17, 2, 65, 65)
+        Input actions: (bs, 16, 2)
+        Output encoded states:  (17, bs, 128)
+        Output predicted states: (16, bs, 128)
+        """
+        bs, trajectory_length, channel, height, width = states.shape # (bs, 17, 2, 65, 65)
+
+        reshaped_states = states.view(bs * trajectory_length, 2, 65, 65) # (bs * 17, 2, 65, 65)
+        encoded_states = self.encoder(reshaped_states) # (bs * 17, 128)
+        encoded_states = encoded_states.view(bs, trajectory_length, 128).permute(1, 0, 2) # (17, bs, 128)
+
+        predicted_states = []
+        for i in range(trajectory_length - 1):
+            prediction = self.predictor(encoded_states[i], actions[:, i]) # (bs, 128)
+            predicted_states.append(prediction)
+        predicted_states = torch.stack(predicted_states, dim=0)  # (16, bs, 128)
+        
+        return encoded_states, predicted_states
+

@@ -1,5 +1,5 @@
 from dataset import create_wall_dataloader
-from my_model import Encoder, Predictor
+from my_model import JEPA
 import torch
 
 def get_device():
@@ -27,23 +27,23 @@ def load_data(device):
 if __name__ == "__main__":
     device = get_device()
     train_ds = load_data(device)
-    encoder = Encoder().to(device)
-    predictor = Predictor().to(device)
+    model = JEPA().to(device)
     for batch in train_ds:
         state = batch.states
         action = batch.actions
         print(state.shape)
         print(action.shape)
-        
-        print("test encoder")
-        print(state[:, 0].shape)
-        hidden_state = encoder(state[:, 0])
-        print(hidden_state.shape)
 
-        print("test predictor")
-        print(action[:, 0].shape)
-        prediction = predictor(hidden_state, action[:, 0])
-        print(prediction.shape)
+        # print("test encoder")
+        # print(state[:, 0].shape)
+        # hidden_state = encoder(state[:, 0])
+        # print(hidden_state.shape)
 
-
+        # print("test predictor")
+        # print(action[:, 0].shape)
+        # prediction = predictor(hidden_state, action[:, 0])
+        # print(prediction.shape)
+        encoded_states, predicted_states = model(state, action)
+        print(encoded_states.shape)
+        print(predicted_states.shape)
         break
