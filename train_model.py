@@ -41,9 +41,9 @@ def vicreg_loss(embeddings, target_embeddings, gamma=1.0, epsilon=1e-4, lambda_=
     Returns:
         torch.Tensor: Total loss.
     """
-    # Flatten embeddings to shape (T * BS, D)
-    embeddings = embeddings.view(-1, embeddings.size(-1))  # (T * BS, D)
-    target_embeddings = target_embeddings.view(-1, target_embeddings.size(-1))  # (T * BS, D)
+    # Flatten embeddings to shape (T * BS, D) using reshape
+    embeddings = embeddings.reshape(-1, embeddings.size(-1))  # (T * BS, D)
+    target_embeddings = target_embeddings.reshape(-1, target_embeddings.size(-1))  # (T * BS, D)
 
     # Invariance Loss
     invariance_loss = F.mse_loss(embeddings, target_embeddings)
