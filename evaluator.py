@@ -113,7 +113,7 @@ class ProbingEvaluator:
                 ################################################################################
                 # TODO: Forward pass through your model
                 encoded_states, predicted_states = model(batch.states, batch.actions)
-                pred_encs = predicted_states
+                pred_encs = encoded_states
                 # pred_encs = model(batch.states, batch.actions)
                 # pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
 
