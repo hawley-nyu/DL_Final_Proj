@@ -1,4 +1,5 @@
 from dataset import create_wall_dataloader
+from my_model import Encoder
 import torch
 
 def get_device():
@@ -19,15 +20,20 @@ def load_data(device):
         device=device,
         train=True,
     )
-
     return train_ds
+
+
 
 if __name__ == "__main__":
     device = get_device()
     train_ds = load_data(device)
+    encoder = Encoder().to(device)
     for batch in train_ds:
         state = batch.states
         action = batch.actions
         print(state.shape)
         print(action.shape)
+        print(state[:, 0].shape)
+        output = encoder(state[:, 0])
+        print(output.shape)
         break
