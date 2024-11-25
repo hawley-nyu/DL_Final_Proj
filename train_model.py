@@ -1,5 +1,5 @@
 from dataset import create_wall_dataloader
-from my_model import Encoder
+from my_model import Encoder, Predictor
 import torch
 
 def get_device():
@@ -28,12 +28,22 @@ if __name__ == "__main__":
     device = get_device()
     train_ds = load_data(device)
     encoder = Encoder().to(device)
+    predictor = Predictor().to(device)
     for batch in train_ds:
         state = batch.states
         action = batch.actions
         print(state.shape)
         print(action.shape)
+        
+        print("test encoder")
         print(state[:, 0].shape)
-        output = encoder(state[:, 0])
-        print(output.shape)
+        hidden_state = encoder(state[:, 0])
+        print(hidden_state.shape)
+
+        print("test predictor")
+        print(action[:, 0].shape)
+        prediction = predictor(hidden_state, action[:, 0])
+        print(prediction.shape)
+
+
         break
