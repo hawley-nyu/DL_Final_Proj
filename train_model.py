@@ -87,5 +87,6 @@ if __name__ == "__main__":
             optimizer.step()
             progress_bar.update(1)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+        torch.save(model.state_dict(), "best_model.pth")
     torch.save(model.state_dict(), "best_model.pth")
         
