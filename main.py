@@ -204,12 +204,14 @@ def train_jepa(
     # Evaluate trained model
     probe_train_ds, probe_val_ds = load_data(device)
     evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
+
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Training data
     train_ds = create_wall_dataloader(
-        data_path="/scratch/yw7565/DL24FA/train",
+        data_path="/scratch/DL24FA/train",
         probing=False,
         device=device,
         train=True,
@@ -218,7 +220,7 @@ if __name__ == "__main__":
 
     # Validation data
     val_ds = create_wall_dataloader(
-        data_path="/scratch/yw7565/DL24FA/val",
+        data_path="/scratch/DL24FA/val",
         probing=False,
         device=device,
         train=False,
@@ -227,21 +229,21 @@ if __name__ == "__main__":
 
     # Probing datasets
     probe_train_ds = create_wall_dataloader(
-        data_path="/scratch/yw7565/DL24FA/probe_normal/train",
+        data_path="/scratch/DL24FA/probe_normal/train",
         probing=True,
         device=device,
         train=True
     )
 
     probe_val_normal_ds = create_wall_dataloader(
-        data_path="/scratch/yw7565/DL24FA/probe_normal/val",
+        data_path="/scratch/DL24FA/probe_normal/val",
         probing=True,
         device=device,
         train=False
     )
 
     probe_val_wall_ds = create_wall_dataloader(
-        data_path="/scratch/yw7565/DL24FA/probe_wall/val",
+        data_path="/scratch/DL24FA/probe_wall/val",
         probing=True,
         device=device,
         train=False
