@@ -153,4 +153,4 @@ if __name__ == "__main__":
 
     # Evaluate trained model
     probe_train_ds, probe_val_ds = load_data(device)
-    avg_losses = evaluate_model(device, model, probe_train_ds, probe_val_ds)
+    evaluate_model(device, model, probe_train_ds, probe_val_ds)
