@@ -125,17 +125,15 @@ def main():
         train_ds,
         batch_size=16,
         shuffle=True,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
-        persistent_workers=True
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=16,
         shuffle=False,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
-        persistent_workers=True
     )
 
     model = VicRegJEPA().to(device)
