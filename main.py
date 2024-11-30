@@ -12,7 +12,7 @@ import glob
 from tqdm import tqdm
 from models import VicRegJEPA
 from torch.utils.data import DataLoader, random_split
-import wandb
+
 from VicRegJEPA_Train import train_jepa
 from dataclasses import dataclass
 
