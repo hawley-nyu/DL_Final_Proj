@@ -1,3 +1,8 @@
+import os
+import logging
+from pathlib import Path
+from typing import Tuple
+
 from dataset import create_wall_dataloader
 from evaluator import ProbingEvaluator
 import torch
@@ -6,9 +11,10 @@ import glob
 
 from tqdm import tqdm
 from models import VicRegJEPA
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import wandb
-from VicRegJEPA_Train import train_jepa, validate_model, save_checkpoint
+from VicRegJEPA_Train import train_jepa
+from dataclasses import dataclass
 
 def get_device():
     """Check for GPU availability."""
@@ -46,15 +52,23 @@ def load_data(device):
     return probe_train_ds, probe_val_ds
 
 
-def load_model():
+'''def load_model():
     """Load or initialize the model."""
     # TODO: Replace MockModel with your trained model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = VicRegJEPA().to(device)
     model.load_state_dict(torch.load('model_weights.pth'))
     model.eval()
-    return model
+    return model'''
 
+def load_model(checkpoint_path=None):
+   device = get_device()
+   model = VicRegJEPA().to(device)
+   if checkpoint_path:
+       model.load_state_dict(torch.load(checkpoint_path))
+       logging.info(f"Loaded checkpoint from {checkpoint_path}")
+   model.eval()
+   return model
 
 def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     evaluator = ProbingEvaluator(
@@ -80,10 +94,17 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('training.log'),
+            logging.StreamHandler()
+        ]
+    )
 
-    # Load training data
+    device = get_device()
+
     full_dataset = create_wall_dataloader(
         data_path="/scratch/DL24FA/train",
         probing=False,
@@ -92,7 +113,6 @@ def main():
         batch_size=32
     )
 
-    # Split training data
     train_size = int(0.9 * len(full_dataset.dataset))
     val_size = len(full_dataset.dataset) - train_size
     train_ds, val_ds = random_split(
@@ -101,16 +121,37 @@ def main():
         generator=torch.Generator().manual_seed(2000)
     )
 
-    train_loader = DataLoader(train_ds, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_ds, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=16,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=16,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True
+    )
 
-    # Load model and probing datasets
     model = VicRegJEPA().to(device)
-    probe_train_ds, probe_val_ds = load_data(device)  # 使用原有load_data函数加载探测数据
+    probe_train_ds, probe_val_ds = load_data(device)
 
-    # Train and evaluate
-    train_jepa(model, train_loader, val_loader, probe_train_ds, probe_val_ds,
-               num_epochs=100, initial_lr=1e-4, device=device, save_path="checkpoints")
+    train_jepa(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
+        num_epochs=100,
+        initial_lr=1e-4,
+        device=device,
+        save_path="checkpoints"
+    )
     evaluate_model(device, model, probe_train_ds, probe_val_ds)
 
 
