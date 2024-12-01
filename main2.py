@@ -4,7 +4,7 @@ import torch
 from models import MockModel
 import glob
 from models2 import  BYOL
-from training import train_byol
+from BYOL_train import train_byol
 
 
 def get_device():
