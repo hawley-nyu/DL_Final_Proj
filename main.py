@@ -126,14 +126,14 @@ def main():
         batch_size=16,
         shuffle=True,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=False,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=16,
         shuffle=False,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=False,
     )
 
     model = VicRegJEPA().to(device)
