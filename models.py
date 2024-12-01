@@ -157,7 +157,7 @@ class VicRegJEPA(nn.Module):
                    (target_cov_offdiag ** 2).sum() / target.shape[1]
 
         # Combined loss
-        loss = 10.0 * sim_loss + 10.0 * std_loss + 0.5 * cov_loss
+        loss = 10.0 * sim_loss + 20.0 * std_loss + 0.5 * cov_loss
 
         return loss, {
             'total_loss': loss.item(),

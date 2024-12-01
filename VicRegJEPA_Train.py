@@ -110,7 +110,7 @@ def train_jepa(
         probe_train_ds,
         probe_val_ds,
         num_epochs: int = 10,
-        initial_lr: float = 1e-5,
+        initial_lr: float = 1e-4,
         device: str = "cuda",
         save_path: str = "checkpoints",
         gradient_clip: float = 0.5,
