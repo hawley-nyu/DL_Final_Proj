@@ -129,9 +129,19 @@ if __name__ == "__main__":
         train=True
     )
 
+    val_loader = create_wall_dataloader(
+        data_path="/scratch/DL24FA/val",
+        probing=False,
+        device=device,
+        train=False
+    )
+
     train_byol(
         model=model,
         train_loader=train_loader,
+        val_loader=val_loader,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
         device=device,
         save_path="checkpoints/byol"
     )
