@@ -55,10 +55,10 @@ class Encoder(nn.Module):
         bs, channel, height, width = x.shape # (bs, 2, 65, 65)
         x = self.conv_block1(x) # (bs, 32, 32, 32)
         identity = x
-        x = self.conv_block2(x) # (bs, 64, 32, 32)
-        x = self.conv_block3(x) # (bs, 64, 32, 32)
-        x = self.conv_block4(x) # (bs, 32, 32, 32)
-        x = x + identity # (bs, 32, 32, 32)
+        # x = self.conv_block2(x) # (bs, 64, 32, 32)
+        # x = self.conv_block3(x) # (bs, 64, 32, 32)
+        # x = self.conv_block4(x) # (bs, 32, 32, 32)
+        # x = x + identity # (bs, 32, 32, 32)
         x = self.conv_block5(x) # (bs, 16, 16, 16)
         x = self.linear_block(x.view(bs, -1)) # (bs, 128)
         return x
@@ -76,10 +76,11 @@ class Predictor(nn.Module):
         )
         self.linear_block = nn.Sequential(
             nn.Linear(128 + 32, 256),
+            # nn.LeakyReLU(),
+            # nn.Linear(256, 512),
             nn.LeakyReLU(),
-            nn.Linear(256, 512),
-            nn.LeakyReLU(),
-            nn.Linear(512, 128)
+            # nn.Linear(512, 128)
+            nn.Linear(256, 128)
         )
     
     def forward(self, state, action):
