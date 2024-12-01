@@ -121,25 +121,29 @@ class VicRegJEPA(nn.Module):
         return encoded_states, predictions
 
     def compute_loss(self, pred, target):
-        # Match sequence lengths
-        min_len = min(pred.shape[0], target.shape[0])
-        pred = pred[:min_len]
-        target = target[:min_len]
+        # Match batch dimensions
+        batch_size = min(pred.shape[1], target.shape[1])
+        pred = pred[:, :batch_size]
+        target = target[:, :batch_size]
 
-        # Reshape and project
-        pred = pred.reshape(-1, self.repr_dim)
-        target = target.reshape(-1, self.repr_dim)
+        # Transpose and reshape for projector
+        pred = pred.transpose(0, 1).reshape(-1, self.repr_dim)
+        target = target.transpose(0, 1).reshape(-1, self.repr_dim)
 
+        # Apply projector
         pred = self.projector(pred)
         with torch.no_grad():
             target = self.projector(target)
 
+        # Invariance loss
         sim_loss = F.mse_loss(pred, target)
 
+        # Variance loss
         std_pred = torch.sqrt(pred.var(dim=0) + 0.0001)
         std_target = torch.sqrt(target.var(dim=0) + 0.0001)
         std_loss = torch.mean(F.relu(1 - std_pred)) + torch.mean(F.relu(1 - std_target))
 
+        # Covariance loss
         pred_centered = pred - pred.mean(dim=0)
         target_centered = target - target.mean(dim=0)
 
@@ -152,6 +156,7 @@ class VicRegJEPA(nn.Module):
         cov_loss = (pred_cov_offdiag ** 2).sum() / pred.shape[1] + \
                    (target_cov_offdiag ** 2).sum() / target.shape[1]
 
+        # Combined loss with adjusted weights
         loss = 10.0 * sim_loss + 10.0 * std_loss + 0.5 * cov_loss
 
         return loss, {
