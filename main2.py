@@ -46,7 +46,7 @@ def load_data(device):
 
 class ViTBackbone(nn.Module):
     def __init__(self, device="cuda", bs=128, n_steps=17, img_size=64, patch_size=8,
-                 in_channels=3, embed_dim=256, num_heads=8, num_layers=6, mlp_ratio=4):
+                 in_channels=2, embed_dim=256, num_heads=8, num_layers=6, mlp_ratio=4):
         super().__init__()
         self.device = device
         self.bs = bs
@@ -78,36 +78,20 @@ class ViTBackbone(nn.Module):
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
     def forward(self, states, actions):
-        """
-        Args:
-            states: [B, T, C, H, W]
-            actions: [B, T-1, 2]
-        """
         B, T, C, H, W = states.shape
-
-        # Process each timestep
         features = []
         for t in range(T):
-            x = states[:, t]  # [B, C, H, W]
-
-            # Patch embedding
-            x = self.patch_embed(x)  # [B, embed_dim, h, w]
-            x = x.flatten(2).transpose(1, 2)  # [B, n_patches, embed_dim]
-
-            # Add cls token and position embedding
+            x = states[:, t]
+            x = self.patch_embed(x)
+            x = x.flatten(2).transpose(1, 2)
             cls_token = self.cls_token.expand(B, -1, -1)
             x = torch.cat([cls_token, x], dim=1)
             x = x + self.pos_embed
-
-            # Apply transformer blocks
             for block in self.blocks:
                 x = block(x)
-
             x = self.norm(x)
-            features.append(x[:, 0])  # Take CLS token embedding
-
-        return torch.stack(features, dim=1)  # [B, T, embed_dim]
-
+            features.append(x[:, 0])
+        return torch.stack(features, dim=1)
 
 def load_model(device):
     backbone = ViTBackbone(device=device)
