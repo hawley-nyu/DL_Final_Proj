@@ -68,41 +68,49 @@ def validate_model(
         probe_val_ds,
         device: torch.device
 ) -> Dict[str, Any]:
-    try:
-        model.eval()
-        val_loss = 0
+    model.eval()
+    val_loss = 0
 
-        with torch.no_grad():
-            for batch in val_loader:
-                states = batch.states.to(device)
-                actions = batch.actions.to(device)
-                predictions = model(states=states, actions=actions)
-                loss, _ = model.compute_loss(
-                    predictions[:, 1:],
-                    predictions.detach()[:, :-1]
-                )
-                val_loss += loss.item()
+    with torch.no_grad():
+        for batch in val_loader:
+            states = batch.states.to(device)
+            actions = batch.actions.to(device)
+            predictions = model(states=states, actions=actions)
+            loss, _ = model.compute_loss(
+                predictions[:, 1:],
+                predictions.detach()[:, :-1]
+            )
+            val_loss += loss.item()
 
-        val_loss /= len(val_loader)
+    val_loss /= len(val_loader)
 
-        evaluator = ProbingEvaluator(
-            device=device,
-            model=model,
-            probe_train_ds=probe_train_ds,
-            probe_val_ds=probe_val_ds,
-            quick_debug=False,
-        )
-        prober = evaluator.train_pred_prober()
-        probe_losses = evaluator.evaluate_all(prober=prober)
+    evaluator = ProbingEvaluator(
+        device=device,
+        model=model,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
+        quick_debug=False,
+    )
+    prober = evaluator.train_pred_prober()
 
-        return {
-            "val_loss": val_loss,
-            "probe_losses": probe_losses
-        }
-    except Exception as e:
-        logging.error(f"Validation error: {e}")
-        return {"val_loss": float('inf'), "probe_losses": {}}
+    # Get training probe losses
+    train_probe_loss = evaluator.evaluate_pred_prober(
+        prober=prober,
+        val_ds=probe_train_ds
+    )
+    logging.info(f"Train probe loss: {train_probe_loss:.4f}")
 
+    # Get validation probe losses
+    val_probe_losses = evaluator.evaluate_all(prober=prober)
+    logging.info("Validation probe losses:")
+    for probe_attr, loss in val_probe_losses.items():
+        logging.info(f"{probe_attr} loss: {loss:.4f}")
+
+    return {
+        "val_loss": val_loss,
+        "train_probe_loss": train_probe_loss,
+        "probe_losses": val_probe_losses
+    }
 def train_jepa(
        model: torch.nn.Module,
        train_loader: DataLoader,
