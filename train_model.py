@@ -74,25 +74,25 @@ if __name__ == "__main__":
     progress_bar = tqdm(range(num_epochs * len(train_dataloader)))
     for epoch in tqdm(range(num_epochs)):
         epoch_loss = 0
-        invariance_loss = 0
-        variance_loss = 0
-        covariance_loss = 0
+        epoch_invariance_loss = 0
+        epoch_variance_loss = 0
+        epoch_covariance_loss = 0
         model.train()
         for batch in train_dataloader:
 
             encoded_states, predicted_states = model(batch.states, batch.actions)
             loss, invariance_loss, variance_loss, covariance_loss = vicreg_loss(predicted_states, encoded_states[1:])
             epoch_loss += loss.item()
-            invariance_loss += invariance_loss.item()
-            variance_loss += variance_loss.item()
-            covariance_loss += covariance_loss.item()
+            epoch_invariance_loss += invariance_loss.item()
+            epoch_variance_loss += variance_loss.item()
+            epoch_covariance_loss += covariance_loss.item()
 
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             progress_bar.update(1)
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Covariance Loss:{covariance_loss:.4f}, Invariance Loss:{invariance_loss:.4f}, Variance Loss:{variance_loss:.4f}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Covariance Loss:{epoch_covariance_loss:.4f}, Invariance Loss:{epoch_invariance_loss:.4f}, Variance Loss:{epoch_variance_loss:.4f}")
         torch.save(model.state_dict(), "best_model.pth")
     torch.save(model.state_dict(), "best_model.pth")
         
