@@ -5,6 +5,7 @@ from models import MockModel
 import glob
 from models2 import BYOL
 from BYOL_train import train_byol
+import torch.nn as nn
 
 
 def get_device():
