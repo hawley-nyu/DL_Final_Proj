@@ -145,7 +145,7 @@ def main():
         val_loader=val_loader,
         probe_train_ds=probe_train_ds,
         probe_val_ds=probe_val_ds,
-        num_epochs=100,
+        num_epochs=10,
         initial_lr=1e-4,
         device=device,
         save_path="checkpoints"

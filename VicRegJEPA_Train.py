@@ -102,7 +102,6 @@ def validate_model(
        "probe_losses": val_probe_losses
    }
 
-
 def train_jepa(
         model: torch.nn.Module,
         train_loader: DataLoader,
@@ -123,7 +122,7 @@ def train_jepa(
 
     model = model.to(device)
     optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     early_stopping = EarlyStopping(patience=early_stopping_patience)
 
     start_epoch = 0
@@ -193,4 +192,4 @@ def train_jepa(
                 logging.info("Early stopping triggered")
                 break
 
-            scheduler.step(val_metrics["val_loss"])
+        scheduler.step()

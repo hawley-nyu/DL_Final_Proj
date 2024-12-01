@@ -66,29 +66,37 @@ class Prober(torch.nn.Module):
 
 
 class VicRegJEPA(nn.Module):
-    def __init__(self, input_channels=2, hidden_dim=256, repr_dim=256):
+    def __init__(self, input_channels=2, hidden_dim=512, repr_dim=256):
         super().__init__()
         self.repr_dim = repr_dim
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(input_channels, 32, 3, padding=1),
+            nn.Conv2d(input_channels, 64, 3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, 3, padding=1),
+            nn.Conv2d(64, 128, 3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Conv2d(64, 64, 3, padding=1),
+            nn.Conv2d(128, 256, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(256, 256, 3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Flatten(),
-            nn.Linear(64 * 16 * 16, hidden_dim),
+            nn.Linear(256 * 8 * 8, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, repr_dim)
         )
 
         self.predictor = nn.Sequential(
             nn.Linear(repr_dim + 2, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, repr_dim)
         )
@@ -158,13 +166,6 @@ class VicRegJEPA(nn.Module):
 
         # Combined loss
         loss = 10.0 * sim_loss + 20.0 * std_loss + 0.5 * cov_loss
-
-        return loss, {
-            'total_loss': loss.item(),
-            'sim_loss': sim_loss.item(),
-            'std_loss': std_loss.item(),
-            'cov_loss': cov_loss.item()
-        }
 
         return loss, {
             'total_loss': loss.item(),
