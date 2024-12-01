@@ -121,16 +121,16 @@ class VicRegJEPA(nn.Module):
         return encoded_states, predictions
 
     def compute_loss(self, pred, target):
-        # Match batch dimensions
+        # Match sequence length and batch size
+        seq_len = min(pred.shape[0], target.shape[0])
         batch_size = min(pred.shape[1], target.shape[1])
-        pred = pred[:, :batch_size]
-        target = target[:, :batch_size]
+        pred = pred[:seq_len, :batch_size]
+        target = target[:seq_len, :batch_size]
 
-        # Transpose and reshape for projector
+        # Reshape and project
         pred = pred.transpose(0, 1).reshape(-1, self.repr_dim)
         target = target.transpose(0, 1).reshape(-1, self.repr_dim)
 
-        # Apply projector
         pred = self.projector(pred)
         with torch.no_grad():
             target = self.projector(target)
@@ -156,8 +156,15 @@ class VicRegJEPA(nn.Module):
         cov_loss = (pred_cov_offdiag ** 2).sum() / pred.shape[1] + \
                    (target_cov_offdiag ** 2).sum() / target.shape[1]
 
-        # Combined loss with adjusted weights
+        # Combined loss
         loss = 10.0 * sim_loss + 10.0 * std_loss + 0.5 * cov_loss
+
+        return loss, {
+            'total_loss': loss.item(),
+            'sim_loss': sim_loss.item(),
+            'std_loss': std_loss.item(),
+            'cov_loss': cov_loss.item()
+        }
 
         return loss, {
             'total_loss': loss.item(),
