@@ -7,6 +7,8 @@ import torch
 from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from evaluator import ProbingEvaluator
+
 
 
 class EarlyStopping:
