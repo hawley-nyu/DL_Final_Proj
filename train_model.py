@@ -25,7 +25,7 @@ def load_data(device):
     return train_ds
 
 
-def vicreg_loss(embeddings, target_embeddings, gamma=1e-4, epsilon=1e-4, lambda_=1.0, mu=1.0, nu=1.0):
+def vicreg_loss(embeddings, target_embeddings, gamma=1, epsilon=1e-4, lambda_=1.0, mu=1.0, nu=1.0):
     """
     VICReg-inspired loss function to prevent representation collapse.
 

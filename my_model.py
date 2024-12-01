@@ -52,6 +52,7 @@ class Encoder(nn.Module):
         Input x:  (bs, 2, 65, 65)
         Output x: (bs, 32, 16, 16)
         """
+        x[:, 1, :, :] = x[:, 0, :, :]
         bs, channel, height, width = x.shape # (bs, 2, 65, 65)
         x = self.conv_block1(x) # (bs, 32, 32, 32)
         identity = x
