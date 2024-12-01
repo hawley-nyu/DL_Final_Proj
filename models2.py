@@ -8,9 +8,11 @@ import torch
 def build_mlp(layers_dims: List[int]):
     layers = []
     for i in range(len(layers_dims) - 2):
+        layers.append(nn.Flatten())
         layers.append(nn.Linear(layers_dims[i], layers_dims[i + 1]))
         layers.append(nn.BatchNorm1d(layers_dims[i + 1]))
         layers.append(nn.ReLU(True))
+    layers.append(nn.Flatten())
     layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
     return nn.Sequential(*layers)
 
@@ -89,14 +91,16 @@ class BYOL(torch.nn.Module):
         self.target_projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
 
     def forward(self, states, actions):
-        # Online network forward pass
-        online_repr = self.backbone(states, actions)
+        online_repr = self.backbone(states, actions)  # [B, T, embed_dim]
+        B, T, D = online_repr.shape
+        online_repr = online_repr.reshape(B * T, D)  # 展平时序维度
+
         online_proj = self.projector(online_repr)
         online_pred = self.predictor(online_proj)
 
-        # Target network forward pass (no gradients)
         with torch.no_grad():
             target_repr = self.target_backbone(states, actions)
+            target_repr = target_repr.reshape(B * T, D)
             target_proj = self.target_projector(target_repr)
 
         return online_pred, target_proj
