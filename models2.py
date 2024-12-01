@@ -72,18 +72,21 @@ class BYOL(torch.nn.Module):
         self.projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
         self.predictor = build_mlp([projection_dim, hidden_dim, projection_dim])
 
-        # Create target network
-        self.target_backbone = type(backbone)(**backbone.__dict__)
+        backbone_kwargs = {
+            'device': backbone.device,
+            'bs': backbone.bs,
+            'n_steps': backbone.n_steps,
+            'img_size': 64,
+            'patch_size': 8,
+            'in_channels': 3,
+            'embed_dim': backbone.repr_dim,
+            'num_heads': 8,
+            'num_layers': 6,
+            'mlp_ratio': 4
+        }
+
+        self.target_backbone = type(backbone)(**backbone_kwargs)
         self.target_projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
-
-        # Initialize target network with same weights
-        self.update_target_network(tau=1.0)
-
-        # Disable gradients for target network
-        for param in self.target_backbone.parameters():
-            param.requires_grad = False
-        for param in self.target_projector.parameters():
-            param.requires_grad = False
 
     def forward(self, states, actions):
         # Online network forward pass
