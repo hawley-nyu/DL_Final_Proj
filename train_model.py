@@ -63,6 +63,12 @@ def vicreg_loss(embeddings, target_embeddings, gamma=1, epsilon=1e-4, lambda_=1.
     total_loss = lambda_ * invariance_loss + mu * variance_loss + nu * covariance_loss
     return total_loss, invariance_loss, variance_loss, covariance_loss
 
+def new_loss(predicted_states, target_states):
+    mse_loss = F.mse_loss(predicted_states, target_states)
+    variance = target_states.var(dim=0).mean()
+    var_loss = F.relu(1e-2 - variance).mean()
+    return mse_loss + var_loss, mse_loss, var_loss
+
 if __name__ == "__main__":
     device = get_device()
     train_dataloader = load_data(device)
@@ -76,23 +82,23 @@ if __name__ == "__main__":
         epoch_loss = 0
         epoch_invariance_loss = 0
         epoch_variance_loss = 0
-        epoch_covariance_loss = 0
+        # epoch_covariance_loss = 0
         model.train()
         for batch in train_dataloader:
 
             encoded_states, predicted_states = model(batch.states, batch.actions)
-            loss, invariance_loss, variance_loss, covariance_loss = vicreg_loss(predicted_states, encoded_states[1:])
+            loss, invariance_loss, variance_loss = new_loss(predicted_states, encoded_states[1:])
             epoch_loss += loss.item()
             epoch_invariance_loss += invariance_loss.item()
             epoch_variance_loss += variance_loss.item()
-            epoch_covariance_loss += covariance_loss.item()
+            # epoch_covariance_loss += covariance_loss.item()
 
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             progress_bar.update(1)
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Covariance Loss:{epoch_covariance_loss:.4f}, Invariance Loss:{epoch_invariance_loss:.4f}, Variance Loss:{epoch_variance_loss:.4f}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Invariance Loss:{epoch_invariance_loss:.4f}, Variance Loss:{epoch_variance_loss:.4f}")
         torch.save(model.state_dict(), "best_model.pth")
     torch.save(model.state_dict(), "best_model.pth")
         
