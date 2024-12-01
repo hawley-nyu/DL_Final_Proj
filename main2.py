@@ -3,7 +3,7 @@ from evaluator import ProbingEvaluator
 import torch
 from models import MockModel
 import glob
-from models import  BYOL
+from models2 import  BYOL
 from training import train_byol
 
 
