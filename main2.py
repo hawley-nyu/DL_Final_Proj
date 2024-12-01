@@ -3,7 +3,7 @@ from evaluator import ProbingEvaluator
 import torch
 from models import MockModel
 import glob
-from models2 import  BYOL
+from models2 import BYOL
 from BYOL_train import train_byol
 
 
@@ -44,7 +44,7 @@ def load_data(device):
 
 
 class ViTBackbone(nn.Module):
-    def __init__(self, device="cuda", bs=64, n_steps=17, img_size=64, patch_size=8,
+    def __init__(self, device="cuda", bs=128, n_steps=17, img_size=64, patch_size=8,
                  in_channels=3, embed_dim=256, num_heads=8, num_layers=6, mlp_ratio=4):
         super().__init__()
         self.device = device
@@ -134,19 +134,21 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 
 if __name__ == "__main__":
     device = get_device()
-    train_loader, val_loader, probe_train_ds, probe_val_ds = load_data(device)
+    probe_train_ds, probe_val_ds = load_data(device)
     model = load_model(device)
 
-    # Training
+    train_loader = create_wall_dataloader(
+        data_path="/scratch/DL24FA/train",
+        probing=False,
+        device=device,
+        train=True
+    )
+
     train_byol(
         model=model,
         train_loader=train_loader,
-        val_loader=val_loader,
-        probe_train_ds=probe_train_ds,
-        probe_val_ds=probe_val_ds,
         device=device,
         save_path="checkpoints/byol"
     )
 
-    # Evaluation
     evaluate_model(device, model, probe_train_ds, probe_val_ds)

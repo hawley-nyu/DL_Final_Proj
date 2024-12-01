@@ -1,7 +1,9 @@
 from typing import List
 import numpy as np
 from torch import nn
-from torch.nn import functional as F
+from torch.nn
+import torch.nn as nn
+import ((functional as F))
 import torch
 
 

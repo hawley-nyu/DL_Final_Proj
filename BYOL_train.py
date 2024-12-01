@@ -60,16 +60,11 @@ def load_checkpoint(
 def train_byol(
         model: BYOL,
         train_loader: DataLoader,
-        val_loader: DataLoader,
-        probe_train_ds,
-        probe_val_ds,
         num_epochs: int = 10,
         initial_lr: float = 1e-4,
         device: str = "cuda",
         save_path: str = "checkpoints",
         gradient_clip: float = 0.5,
-        validation_interval: int = 5,
-        early_stopping_patience: int = 7,
         resume_from: Optional[str] = None
 ) -> None:
     save_path = Path(save_path)
@@ -78,14 +73,11 @@ def train_byol(
     model = model.to(device)
     optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
-    early_stopping = EarlyStopping(patience=early_stopping_patience)
 
     start_epoch = 0
     if resume_from:
         start_epoch, _ = load_checkpoint(model, optimizer, Path(resume_from))
         logging.info(f"Resuming from epoch {start_epoch}")
-
-    best_val_loss = float('inf')
 
     for epoch in range(start_epoch, num_epochs):
         model.train()
@@ -105,7 +97,6 @@ def train_byol(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clip)
                 optimizer.step()
 
-                # Update target network
                 model.update_target_network()
 
                 total_train_loss += loss.item()
@@ -115,29 +106,13 @@ def train_byol(
                 })
 
         avg_train_loss = total_train_loss / len(train_loader)
-
-        if (epoch + 1) % validation_interval == 0:
-            val_metrics = validate_byol(model, val_loader, probe_train_ds, probe_val_ds, device)
-
-            metrics = {
-                "train_loss": avg_train_loss,
-                "val_loss": val_metrics["val_loss"],
-                "learning_rate": optimizer.param_groups[0]['lr']
-            }
-            metrics.update({f"probe_{k}_loss": v for k, v in val_metrics["probe_losses"].items()})
-
-            if val_metrics["val_loss"] < best_val_loss:
-                best_val_loss = val_metrics["val_loss"]
-                save_checkpoint(model, optimizer, epoch, metrics, save_path / "best_model.pth")
-
-            save_checkpoint(model, optimizer, epoch, metrics, save_path / f"checkpoint_epoch_{epoch + 1}.pth")
-
-            if early_stopping(val_metrics["val_loss"]):
-                logging.info("Early stopping triggered")
-                break
+        metrics = {
+            "train_loss": avg_train_loss,
+            "learning_rate": optimizer.param_groups[0]['lr']
+        }
+        save_checkpoint(model, optimizer, epoch, metrics, save_path / f"checkpoint_epoch_{epoch + 1}.pth")
 
         scheduler.step()
-
 
 def validate_byol(
         model: BYOL,
