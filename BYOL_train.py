@@ -8,6 +8,8 @@ from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from evaluator import ProbingEvaluator
+from models2 import BYOL
+
 
 class EarlyStopping:
    def __init__(self, patience: int = 7, min_delta: float = 0):
