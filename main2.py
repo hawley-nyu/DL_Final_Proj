@@ -103,7 +103,7 @@ def load_model(device):
 def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     evaluator = ProbingEvaluator(
         device=device,
-        model=model,
+        model=model.backbone,
         probe_train_ds=probe_train_ds,
         probe_val_ds=probe_val_ds,
         quick_debug=False,

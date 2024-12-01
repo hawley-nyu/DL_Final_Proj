@@ -7,12 +7,11 @@ import torch
 
 def build_mlp(layers_dims: List[int]):
     layers = []
+    layers.append(nn.Flatten())
     for i in range(len(layers_dims) - 2):
-        layers.append(nn.Flatten())
         layers.append(nn.Linear(layers_dims[i], layers_dims[i + 1]))
         layers.append(nn.BatchNorm1d(layers_dims[i + 1]))
         layers.append(nn.ReLU(True))
-    layers.append(nn.Flatten())
     layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
     return nn.Sequential(*layers)
 
@@ -74,16 +73,18 @@ class BYOL(torch.nn.Module):
         self.projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
         self.predictor = build_mlp([projection_dim, hidden_dim, projection_dim])
 
-        backbone_kwargs = backbone.__dict__.copy()
-        backbone_kwargs.pop('_parameters', None)
-        backbone_kwargs.pop('_buffers', None)
-        backbone_kwargs.pop('_non_persistent_buffers_set', None)
-        backbone_kwargs.pop('_backward_hooks', None)
-        backbone_kwargs.pop('_forward_hooks', None)
-        backbone_kwargs.pop('_forward_pre_hooks', None)
-        backbone_kwargs.pop('_modules', None)
-        backbone_kwargs.pop('training', None)
-
+        backbone_kwargs = {
+            'device': backbone.device,
+            'bs': backbone.bs,
+            'n_steps': backbone.n_steps,
+            'img_size': 64,
+            'patch_size': 8,
+            'in_channels': 2,
+            'embed_dim': backbone.repr_dim,
+            'num_heads': 8,
+            'num_layers': 6,
+            'mlp_ratio': 4
+        }
 
         self.target_backbone = type(backbone)(**backbone_kwargs)
         self.target_projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
@@ -95,9 +96,14 @@ class BYOL(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, states, actions):
-        online_repr = self.backbone(states, actions)  # [B, T, embed_dim]
+        if states.dim() != 5:
+            raise ValueError(f"Expected states to have 5 dimensions (B,T,C,H,W), got {states.dim()}")
+        if actions.dim() != 3:
+            raise ValueError(f"Expected actions to have 3 dimensions (B,T-1,2), got {actions.dim()}")
+
+        online_repr = self.backbone(states, actions)
         B, T, D = online_repr.shape
-        online_repr = online_repr.reshape(B * T, D)  # 展平时序维度
+        online_repr = online_repr.reshape(B * T, D)
 
         online_proj = self.projector(online_repr)
         online_pred = self.predictor(online_proj)
