@@ -86,7 +86,7 @@ class VicRegJEPA(nn.Module):
         )
 
         self.predictor = nn.Sequential(
-            nn.Linear(repr_dim + 2, hidden_dim),  # +2 for action
+            nn.Linear(repr_dim + 2, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -100,41 +100,36 @@ class VicRegJEPA(nn.Module):
             nn.Linear(hidden_dim, repr_dim)
         )
 
-    def forward(self, states=None, actions=None, target_states=None):
-        """
-        Args:
-            states: [BS, T, C, H, W]
-            actions: [BS, T-1, 2]
-        Returns:
-            predictions: [BS, T, D]
-        """
+    def forward(self, states, actions):
         batch_size, seq_len = states.shape[:2]
-        device = states.device
 
-        # Reshape states for batch processing
+        # Encode states
         states_flat = states.reshape(-1, *states.shape[2:])
-        all_encodings = self.encoder(states_flat)
-        all_encodings = all_encodings.reshape(batch_size, seq_len, -1)
+        encoded_states = self.encoder(states_flat)
+        encoded_states = encoded_states.reshape(batch_size, seq_len, -1)
+        encoded_states = encoded_states.transpose(0, 1)  # (BS, T, D) -> (T, BS, D)
 
-        # Initial state
-        predictions = [all_encodings[:, 0]]
-        current_state = all_encodings[:, 0]
+        # Make predictions
+        predictions = []
+        current_state = encoded_states[0]  # Initial state (BS, D)
 
-        # Predict future states
         for t in range(seq_len - 1):
             state_action = torch.cat([current_state, actions[:, t]], dim=1)
             next_state = self.predictor(state_action)
             predictions.append(next_state)
             current_state = next_state
 
-        predictions = torch.stack(predictions, dim=1)
-        return predictions
+        predictions = torch.stack(predictions, dim=0)  # (T-1, BS, D)
+        return encoded_states, predictions
 
     def compute_loss(self, pred, target):
-        # Project both predictions and targets
-        pred = self.projector(pred.reshape(-1, pred.shape[-1]))
+        # Reshape and project
+        pred = pred.reshape(-1, self.repr_dim)
+        target = target.reshape(-1, self.repr_dim)
+
+        pred = self.projector(pred)
         with torch.no_grad():
-            target = self.projector(target.reshape(-1, target.shape[-1]))
+            target = self.projector(target)
 
         # Invariance loss
         sim_loss = F.mse_loss(pred, target)
@@ -157,8 +152,8 @@ class VicRegJEPA(nn.Module):
         cov_loss = (pred_cov_offdiag ** 2).sum() / pred.shape[1] + \
                    (target_cov_offdiag ** 2).sum() / target.shape[1]
 
-        # Combined loss
-        loss = 25.0 * sim_loss + 25.0 * std_loss + 1.0 * cov_loss
+        # Combined loss with adjusted weights
+        loss = 10.0 * sim_loss + 10.0 * std_loss + 0.5 * cov_loss
 
         return loss, {
             'total_loss': loss.item(),
