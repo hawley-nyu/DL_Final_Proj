@@ -74,21 +74,25 @@ class BYOL(torch.nn.Module):
         self.projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
         self.predictor = build_mlp([projection_dim, hidden_dim, projection_dim])
 
-        backbone_kwargs = {
-            'device': backbone.device,
-            'bs': backbone.bs,
-            'n_steps': backbone.n_steps,
-            'img_size': 64,
-            'patch_size': 8,
-            'in_channels': 3,
-            'embed_dim': backbone.repr_dim,
-            'num_heads': 8,
-            'num_layers': 6,
-            'mlp_ratio': 4
-        }
+        backbone_kwargs = backbone.__dict__.copy()
+        backbone_kwargs.pop('_parameters', None)
+        backbone_kwargs.pop('_buffers', None)
+        backbone_kwargs.pop('_non_persistent_buffers_set', None)
+        backbone_kwargs.pop('_backward_hooks', None)
+        backbone_kwargs.pop('_forward_hooks', None)
+        backbone_kwargs.pop('_forward_pre_hooks', None)
+        backbone_kwargs.pop('_modules', None)
+        backbone_kwargs.pop('training', None)
+
 
         self.target_backbone = type(backbone)(**backbone_kwargs)
         self.target_projector = build_mlp([backbone.repr_dim, hidden_dim, projection_dim])
+
+        self.update_target_network(tau=1.0)
+        for param in self.target_backbone.parameters():
+            param.requires_grad = False
+        for param in self.target_projector.parameters():
+            param.requires_grad = False
 
     def forward(self, states, actions):
         online_repr = self.backbone(states, actions)  # [B, T, embed_dim]
