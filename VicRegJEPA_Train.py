@@ -102,105 +102,95 @@ def validate_model(
        "probe_losses": val_probe_losses
    }
 
+
 def train_jepa(
-      model: torch.nn.Module,
-      train_loader: DataLoader,
-      val_loader: DataLoader,
-      probe_train_ds,
-      probe_val_ds,
-      num_epochs: int = 10,
-      initial_lr: float = 1e-5,
-      device: str = "cuda",
-      save_path: str = "checkpoints",
-      gradient_clip: float = 0.5,
-      validation_interval: int = 5,
-      early_stopping_patience: int = 7,
-      resume_from: Optional[str] = None
+        model: torch.nn.Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        probe_train_ds,
+        probe_val_ds,
+        num_epochs: int = 10,
+        initial_lr: float = 1e-5,
+        device: str = "cuda",
+        save_path: str = "checkpoints",
+        gradient_clip: float = 0.5,
+        validation_interval: int = 5,
+        early_stopping_patience: int = 7,
+        resume_from: Optional[str] = None
 ) -> None:
-   save_path = Path(save_path)
-   save_path.mkdir(exist_ok=True)
+    save_path = Path(save_path)
+    save_path.mkdir(exist_ok=True)
 
-   model = model.to(device)
-   optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
-   scheduler = lr_scheduler.ReduceLROnPlateau(
-       optimizer, mode='min', factor=0.5, patience=5, verbose=True
-   )
-   early_stopping = EarlyStopping(patience=early_stopping_patience)
+    model = model.to(device)
+    optimizer = Adam(model.parameters(), lr=initial_lr, weight_decay=1e-4)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    early_stopping = EarlyStopping(patience=early_stopping_patience)
 
-   start_epoch = 0
-   if resume_from:
-       start_epoch, _ = load_checkpoint(model, optimizer, Path(resume_from))
-       logging.info(f"Resuming from epoch {start_epoch}")
+    start_epoch = 0
+    if resume_from:
+        start_epoch, _ = load_checkpoint(model, optimizer, Path(resume_from))
+        logging.info(f"Resuming from epoch {start_epoch}")
 
-   best_val_loss = float('inf')
-   logging.info(f"Training on {len(train_loader.dataset)} samples")
-   logging.info(f"Validation on {len(val_loader.dataset)} samples")
+    best_val_loss = float('inf')
+    logging.info(f"Training on {len(train_loader.dataset)} samples")
+    logging.info(f"Validation on {len(val_loader.dataset)} samples")
 
-   for epoch in range(start_epoch, num_epochs):
-       model.train()
-       total_train_loss = 0
-       batch_metrics = []
+    for epoch in range(start_epoch, num_epochs):
+        model.train()
+        total_train_loss = 0
+        batch_metrics = []
 
-       with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}") as pbar:
-           for batch_idx, batch in enumerate(pbar):
-               optimizer.zero_grad()
+        with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}") as pbar:
+            for batch_idx, batch in enumerate(pbar):
+                optimizer.zero_grad()
 
-               states = batch.states.to(device)
-               actions = batch.actions.to(device)
+                states = batch.states.to(device)
+                actions = batch.actions.to(device)
 
-               encoded_states, predictions = model(states=states, actions=actions)
-               loss, metrics = model.compute_loss(predictions, encoded_states[:, 1:])
+                encoded_states, predictions = model(states=states, actions=actions)
+                seq_len = min(predictions.shape[0], encoded_states.shape[1] - 1)
 
-               loss.backward()
-               torch.nn.utils.clip_grad_norm_(
-                   model.parameters(),
-                   max_norm=gradient_clip
-               )
-               optimizer.step()
+                loss, metrics = model.compute_loss(
+                    predictions[:seq_len],
+                    encoded_states[:, 1:seq_len + 1]
+                )
 
-               batch_metrics.append(metrics)
-               total_train_loss += loss.item()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clip)
+                optimizer.step()
 
-               pbar.set_postfix({
-                   'train_loss': f"{loss.item():.4f}",
-                   'lr': f"{optimizer.param_groups[0]['lr']:.2e}"
-               })
+                batch_metrics.append(metrics)
+                total_train_loss += loss.item()
 
-       avg_train_loss = total_train_loss / len(train_loader)
+                pbar.set_postfix({
+                    'train_loss': f"{loss.item():.4f}",
+                    'lr': f"{optimizer.param_groups[0]['lr']:.2e}"
+                })
 
-       if (epoch + 1) % validation_interval == 0:
-           val_metrics = validate_model(
-               model, val_loader, probe_train_ds, probe_val_ds, device
-           )
+        avg_train_loss = total_train_loss / len(train_loader)
 
-           metrics = {
-               "train_loss": avg_train_loss,
-               "val_loss": val_metrics["val_loss"],
-               "learning_rate": optimizer.param_groups[0]['lr']
-           }
-           metrics.update({
-               f"probe_{k}_loss": v
-               for k, v in val_metrics["probe_losses"].items()
-           })
+        if (epoch + 1) % validation_interval == 0:
+            val_metrics = validate_model(model, val_loader, probe_train_ds, probe_val_ds, device)
 
-           logging.info(f"\nEpoch {epoch + 1}")
-           logging.info(f"Train Loss: {avg_train_loss:.4f}")
-           logging.info(f"Val Loss: {val_metrics['val_loss']:.4f}")
+            metrics = {
+                "train_loss": avg_train_loss,
+                "val_loss": val_metrics["val_loss"],
+                "learning_rate": optimizer.param_groups[0]['lr']
+            }
+            metrics.update({f"probe_{k}_loss": v for k, v in val_metrics["probe_losses"].items()})
 
-           if val_metrics["val_loss"] < best_val_loss:
-               best_val_loss = val_metrics["val_loss"]
-               save_checkpoint(
-                   model, optimizer, epoch, metrics,
-                   save_path / "best_model.pth"
-               )
+            logging.info(f"\nEpoch {epoch + 1}")
+            logging.info(f"Train Loss: {avg_train_loss:.4f}")
+            logging.info(f"Val Loss: {val_metrics['val_loss']:.4f}")
 
-           save_checkpoint(
-               model, optimizer, epoch, metrics,
-               save_path / f"checkpoint_epoch_{epoch+1}.pth"
-           )
+            if val_metrics["val_loss"] < best_val_loss:
+                best_val_loss = val_metrics["val_loss"]
+                save_checkpoint(model, optimizer, epoch, metrics, save_path / "best_model.pth")
 
-           if early_stopping(val_metrics["val_loss"]):
-               logging.info("Early stopping triggered")
-               break
+            save_checkpoint(model, optimizer, epoch, metrics, save_path / f"checkpoint_epoch_{epoch + 1}.pth")
 
-           scheduler.step(val_metrics["val_loss"])
+            if early_stopping(val_metrics["val_loss"]):
+                logging.info("Early stopping triggered")
+                break
+
+            scheduler.step(val_metrics["val_loss"])

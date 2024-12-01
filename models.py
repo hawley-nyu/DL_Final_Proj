@@ -103,15 +103,13 @@ class VicRegJEPA(nn.Module):
     def forward(self, states, actions):
         batch_size, seq_len = states.shape[:2]
 
-        # Encode states
         states_flat = states.reshape(-1, *states.shape[2:])
         encoded_states = self.encoder(states_flat)
         encoded_states = encoded_states.reshape(batch_size, seq_len, -1)
         encoded_states = encoded_states.transpose(0, 1)  # (BS, T, D) -> (T, BS, D)
 
-        # Make predictions
         predictions = []
-        current_state = encoded_states[0]  # Initial state (BS, D)
+        current_state = encoded_states[0]
 
         for t in range(seq_len - 1):
             state_action = torch.cat([current_state, actions[:, t]], dim=1)
@@ -123,6 +121,11 @@ class VicRegJEPA(nn.Module):
         return encoded_states, predictions
 
     def compute_loss(self, pred, target):
+        # Match sequence lengths
+        min_len = min(pred.shape[0], target.shape[0])
+        pred = pred[:min_len]
+        target = target[:min_len]
+
         # Reshape and project
         pred = pred.reshape(-1, self.repr_dim)
         target = target.reshape(-1, self.repr_dim)
@@ -131,15 +134,12 @@ class VicRegJEPA(nn.Module):
         with torch.no_grad():
             target = self.projector(target)
 
-        # Invariance loss
         sim_loss = F.mse_loss(pred, target)
 
-        # Variance loss
         std_pred = torch.sqrt(pred.var(dim=0) + 0.0001)
         std_target = torch.sqrt(target.var(dim=0) + 0.0001)
         std_loss = torch.mean(F.relu(1 - std_pred)) + torch.mean(F.relu(1 - std_target))
 
-        # Covariance loss
         pred_centered = pred - pred.mean(dim=0)
         target_centered = target - target.mean(dim=0)
 
@@ -152,7 +152,6 @@ class VicRegJEPA(nn.Module):
         cov_loss = (pred_cov_offdiag ** 2).sum() / pred.shape[1] + \
                    (target_cov_offdiag ** 2).sum() / target.shape[1]
 
-        # Combined loss with adjusted weights
         loss = 10.0 * sim_loss + 10.0 * std_loss + 0.5 * cov_loss
 
         return loss, {
