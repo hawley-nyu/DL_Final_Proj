@@ -96,12 +96,8 @@ class BYOL(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, states, actions):
-        if states.dim() != 5:
-            raise ValueError(f"Expected states to have 5 dimensions (B,T,C,H,W), got {states.dim()}")
-        if actions.dim() != 3:
-            raise ValueError(f"Expected actions to have 3 dimensions (B,T-1,2), got {actions.dim()}")
-
-        online_repr = self.backbone(states, actions)
+        online_init, online_preds = self.backbone(states, actions)
+        online_repr = torch.cat([online_init, online_preds], dim=0)
         B, T, D = online_repr.shape
         online_repr = online_repr.reshape(B * T, D)
 
@@ -109,7 +105,8 @@ class BYOL(torch.nn.Module):
         online_pred = self.predictor(online_proj)
 
         with torch.no_grad():
-            target_repr = self.target_backbone(states, actions)
+            target_init, target_preds = self.target_backbone(states, actions)
+            target_repr = torch.cat([target_init, target_preds], dim=0)
             target_repr = target_repr.reshape(B * T, D)
             target_proj = self.target_projector(target_repr)
 
