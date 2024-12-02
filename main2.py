@@ -77,21 +77,22 @@ class ViTBackbone(nn.Module):
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
-    def forward(self, states, actions):
-        B, T, C, H, W = states.shape
-        features = []
-        for t in range(T):
-            x = states[:, t]
-            x = self.patch_embed(x)
-            x = x.flatten(2).transpose(1, 2)
-            cls_token = self.cls_token.expand(B, -1, -1)
-            x = torch.cat([cls_token, x], dim=1)
-            x = x + self.pos_embed
-            for block in self.blocks:
-                x = block(x)
-            x = self.norm(x)
-            features.append(x[:, 0])
-        return torch.stack(features, dim=1)
+        def forward(self, states, actions):
+            B, T, C, H, W = states.shape
+            features = []
+            for t in range(T):
+                x = states[:, t]
+                x = self.patch_embed(x)
+                x = x.flatten(2).transpose(1, 2)
+                cls_token = self.cls_token.expand(B, -1, -1)
+                x = torch.cat([cls_token, x], dim=1)
+                x = x + self.pos_embed
+                for block in self.blocks:
+                    x = block(x)
+                x = self.norm(x)
+                features.append(x[:, 0])
+            encoded = torch.stack(features, dim=1)  # [B, T, embed_dim]
+            return encoded[0].unsqueeze(0), encoded[1:]
 
 def load_model(device):
     backbone = ViTBackbone(device=device)
