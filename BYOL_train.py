@@ -81,7 +81,7 @@ def train_byol(
         train_loader: DataLoader,
         probe_train_ds,
         probe_val_ds,
-        num_epochs: int = 10,
+        num_epochs: int = 3,
         initial_lr: float = 1e-4,
         device: str = "cuda",
         save_path: str = "checkpoints",
