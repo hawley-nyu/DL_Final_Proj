@@ -59,10 +59,26 @@ def load_checkpoint(
    return 0, None
 
 
+def validate_byol(model: BYOL, probe_train_ds, probe_val_ds, device: torch.device) -> Dict[str, Any]:
+    model.eval()
+    evaluator = ProbingEvaluator(
+        device=device,
+        model=model.backbone,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
+        quick_debug=False,
+    )
+    prober = evaluator.train_pred_prober()
+    val_probe_losses = evaluator.evaluate_all(prober=prober)
+
+    return {
+        "probe_losses": val_probe_losses
+    }
+
+
 def train_byol(
         model: BYOL,
         train_loader: DataLoader,
-        val_loader: DataLoader,
         probe_train_ds,
         probe_val_ds,
         num_epochs: int = 10,
@@ -111,64 +127,23 @@ def train_byol(
                     'lr': f"{optimizer.param_groups[0]['lr']:.2e}"
                 })
 
-        # Validation
-        val_metrics = validate_byol(model, val_loader, probe_train_ds, probe_val_ds, device)
-        val_loss = val_metrics['val_loss']
-
+        val_metrics = validate_byol(model, probe_train_ds, probe_val_ds, device)
         avg_train_loss = total_train_loss / len(train_loader)
+
         metrics = {
             "train_loss": avg_train_loss,
-            "val_loss": val_loss,
             "learning_rate": optimizer.param_groups[0]['lr']
         }
         metrics.update({f"probe_{k}_loss": v for k, v in val_metrics["probe_losses"].items()})
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if metrics["probe_normal_loss"] < best_val_loss:
+            best_val_loss = metrics["probe_normal_loss"]
             save_checkpoint(model, optimizer, epoch, metrics, save_path / "best_model.pth")
 
         save_checkpoint(model, optimizer, epoch, metrics, save_path / f"checkpoint_epoch_{epoch + 1}.pth")
 
-        if early_stopping(val_loss):
+        if early_stopping(metrics["probe_normal_loss"]):
             print(f"\nEarly stopping triggered after epoch {epoch + 1}")
             break
 
         scheduler.step()
-
-def validate_byol(
-        model: BYOL,
-        val_loader: DataLoader,
-        probe_train_ds,
-        probe_val_ds,
-        device: torch.device
-) -> Dict[str, Any]:
-    model.eval()
-    val_loss = 0
-
-    with torch.no_grad():
-        for batch in val_loader:
-            states = batch.states.to(device)
-            actions = batch.actions.to(device)
-            online_pred, target_proj = model(states, actions)
-            loss = model.loss_fn(online_pred, target_proj)
-            val_loss += loss.item()
-
-    val_loss /= len(val_loader)
-
-    evaluator = ProbingEvaluator(
-        device=device,
-        model=model.backbone,  # Use backbone for probing
-        probe_train_ds=probe_train_ds,
-        probe_val_ds=probe_val_ds,
-        quick_debug=False,
-    )
-    prober = evaluator.train_pred_prober()
-
-    train_probe_loss = evaluator.evaluate_pred_prober(prober=prober, val_ds=probe_train_ds)
-    val_probe_losses = evaluator.evaluate_all(prober=prober)
-
-    return {
-        "val_loss": val_loss,
-        "train_probe_loss": train_probe_loss,
-        "probe_losses": val_probe_losses
-    }
