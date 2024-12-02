@@ -78,7 +78,7 @@ class ViTBackbone(nn.Module):
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
     def forward(self, states, actions):
-        features = []
+        B, T, C, H, W = states.shape
         x = states[:, 0]
         x = self.patch_embed(x)
         x = x.flatten(2).transpose(1, 2)
@@ -91,7 +91,7 @@ class ViTBackbone(nn.Module):
         encoded = x[:, 0]
 
         predicted = []
-        for t in range(1, states.shape[1]):
+        for t in range(1, T):
             x = states[:, t]
             x = self.patch_embed(x)
             x = x.flatten(2).transpose(1, 2)
