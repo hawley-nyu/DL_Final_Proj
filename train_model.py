@@ -74,7 +74,7 @@ if __name__ == "__main__":
     train_dataloader = load_data(device)
     model = JEPA().to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # criterion = torch.nn.MSELoss()
     num_epochs = 8
     progress_bar = tqdm(range(num_epochs * len(train_dataloader)))
