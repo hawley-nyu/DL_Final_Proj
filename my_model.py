@@ -173,7 +173,7 @@ class JEPA(nn.Module):
         states[:,:,1,:,:] = states[:,:,0,:,:]
 
         encoded_states = self.encoder(states[:,:-1,:,:,:].contiguous().view(bs * (trajectory_length -1), 2, 65, 65)) # (bs * 17, 2, 65, 65)
-        encoded_target_states = self.target_encoder(states[:,1:,:,:,:].contiguous().view(bs * (trajectory_length-1), 2, 65, 65)) 
+        encoded_target_states = self.encoder(states[:,1:,:,:,:].contiguous().view(bs * (trajectory_length-1), 2, 65, 65)) 
 
         encoded_states = encoded_states.view(bs, trajectory_length - 1, 256).permute(1, 0, 2) # (17, bs, 256)
 
