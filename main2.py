@@ -78,7 +78,7 @@ class ViTBackbone(nn.Module):
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
     def forward(self, states, actions):
-        states[:, :, 1, :, :] = states[:, :, 0, :, :] #ignore the wall
+        states[:, :, 1, :, :] = states[:, :, 0, :, :] #ignore the wall1
 
         B, T, C, H, W = states.shape
         x = states[:, 0]

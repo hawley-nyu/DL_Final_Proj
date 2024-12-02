@@ -110,6 +110,8 @@ class VicRegJEPA(nn.Module):
 
     def forward(self, states, actions):
         batch_size, seq_len = states.shape[:2]
+        # Copy trajectory channel over wall channel
+        states[:, :, 1, :, :] = states[:, :, 0, :, :]  #ignore the wall
 
         states_flat = states.reshape(-1, *states.shape[2:])
         encoded_states = self.encoder(states_flat)
