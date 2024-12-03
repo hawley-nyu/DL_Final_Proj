@@ -132,45 +132,34 @@ class VicRegJEPA(nn.Module):
             param_k.requires_grad = False
 
     def forward(self, states, actions):
-        """
-        Args:
-            states: [B, T, Ch, H, W]
-            actions: [B, T-1, 2]
-        Returns:
-            predictions: [B, T-1, D]
-            targets: [B, T-1, D]
-        """
         B, T = states.shape[:2]
+
+        # For evaluator
         if T == 1:
             predictions = []
-            s0 = self.encoder(states[:, 0])
-            current_pred_state = s0
+            s_pred = self.encoder(states[:, 0])
 
-            # action for prediction
             for t in range(actions.shape[1]):
-                pred_next = self.predictor(current_pred_state, actions[:, t])
-                predictions.append(pred_next)
-                current_pred_state = pred_next
+                s_pred = self.predictor(s_pred, actions[:, t])
+                predictions.append(s_pred)
 
-            predictions = torch.stack(predictions, dim=0)  # [T, B, D]
+            predictions = torch.stack(predictions, dim=1)
             return predictions, None
 
-            #training
+        # For training
         predictions = []
         targets = []
-        s0 = self.encoder(states[:, 0])
-        current_pred_state = s0
+        s_pred = self.encoder(states[:, 0])
 
         for t in range(T - 1):
-            pred_next = self.predictor(current_pred_state, actions[:, t])
-            predictions.append(pred_next)
-            current_pred_state = pred_next
+            s_pred = self.predictor(s_pred, actions[:, t])
+            predictions.append(s_pred)
 
             with torch.no_grad():
                 target = self.target_encoder(states[:, t + 1])
             targets.append(target)
 
-        predictions = torch.stack(predictions, dim=1)  # [B, T, D]
+        predictions = torch.stack(predictions, dim=1)
         targets = torch.stack(targets, dim=1)
 
         return predictions, targets
