@@ -168,8 +168,8 @@ class VicRegJEPA(nn.Module):
         sim_loss = F.mse_loss(predictions, targets)
 
         # Variance loss
-        std_pred = torch.sqrt(predictions.var(dim=0) + 1e-4)
-        std_target = torch.sqrt(targets.var(dim=0) + 1e-4)
+        std_pred = torch.sqrt(predictions.var(dim=1) + 1e-4)
+        std_target = torch.sqrt(targets.var(dim=1) + 1e-4)
         var_loss = torch.mean(F.relu(std_min - std_pred)) + torch.mean(F.relu(std_min - std_target))
 
         # Covariance loss
