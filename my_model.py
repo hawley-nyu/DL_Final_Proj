@@ -166,9 +166,10 @@ class JEPA(nn.Module):
         Input states:  (bs, 17, 2, 65, 65)
         Input actions: (bs, 16, 2)
         Output encoded states:  (17, bs, 256)
-        Output predicted states: (16, bs, 256)
+        Output predicted states: (17, bs, 256)
         """
         bs, trajectory_length, channel, height, width = states.shape # (bs, 17, 2, 65, 65)
+        bs, action_length, action_dim = actions.shape # (bs, 16, 2)
 
         states[:,:,1,:,:] = states[:,:,0,:,:]
 
@@ -181,7 +182,7 @@ class JEPA(nn.Module):
 
         predicted_states = []
         predicted_states.append(encoded_states[0])
-        for i in range(trajectory_length - 1):
+        for i in range(action_length - 1):
             prediction = self.predictor(predicted_states[i], actions[:, i]) # (bs, 256)
             predicted_states.append(prediction)
         predicted_states = torch.stack(predicted_states, dim=0)  # (16, bs, 256)
