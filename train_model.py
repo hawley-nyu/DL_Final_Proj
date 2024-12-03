@@ -87,6 +87,7 @@ if __name__ == "__main__":
         for batch in train_dataloader:
 
             encoded_states, predicted_states = model(batch.states, batch.actions)
+            print(encoded_states.shape, predicted_states.shape)
             loss, invariance_loss, variance_loss = new_loss(predicted_states[:,1:], encoded_states[:,1:])
             epoch_loss += loss.item()
             epoch_invariance_loss += invariance_loss.item()
