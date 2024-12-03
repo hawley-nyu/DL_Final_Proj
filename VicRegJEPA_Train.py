@@ -1,15 +1,21 @@
+import torch
+from torch.optim import Adam, lr_scheduler
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from evaluator import ProbingEvaluator
+
 def train_jepa(
         model: torch.nn.Module,
         train_loader: DataLoader,
         val_loader: DataLoader,
         probe_train_ds,
         probe_val_ds,
-        num_epochs: int = 100,  # 增加轮数
-        initial_lr: float = 2e-4,  # 调整学习率
+        num_epochs: int = 6,
+        initial_lr: float = 2e-4,
         device: str = "cuda",
         save_path: str = "checkpoints",
-        gradient_clip: float = 1.0,  # 放宽梯度裁剪
-        validation_interval: int = 5,
+        gradient_clip: float = 1.0,
+        validation_interval: int = 3,
         early_stopping_patience: int = 10,
         resume_from: Optional[str] = None
 ) -> None:
