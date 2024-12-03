@@ -207,7 +207,7 @@ class Predictor(nn.Module):
         return x
 
 class TargetEncoder(Encoder):
-    def __init__(self, input_shape, repr_dim=256):
+    def __init__(self, input_shape=(2,65,65), repr_dim=256):
         super().__init__(input_shape, repr_dim)
 
 
