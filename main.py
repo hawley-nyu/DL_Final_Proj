@@ -96,12 +96,41 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dataset = WallDataset(split="train", batch_size=32)
-    val_dataset = WallDataset(split="val", batch_size=32)
-    probe_train_ds = WallDataset(split="probe_train", batch_size=32)
+    # Load datasets
+    train_loader = create_wall_dataloader(
+        data_path="/scratch/DL24FA/train",
+        probing=False,
+        device=device,
+        train=True
+    )
+
+    val_loader = create_wall_dataloader(
+        data_path="/scratch/DL24FA/train",
+        probing=False,
+        device=device,
+        train=False
+    )
+
+    probe_train_ds = create_wall_dataloader(
+        data_path="/scratch/DL24FA/probe_normal/train",
+        probing=True,
+        device=device,
+        train=True
+    )
+
     probe_val = {
-        "normal": WallDataset(split="probe_normal", batch_size=32),
-        "wall": WallDataset(split="probe_wall", batch_size=32)
+        "normal": create_wall_dataloader(
+            data_path="/scratch/DL24FA/probe_normal/val",
+            probing=True,
+            device=device,
+            train=False
+        ),
+        "wall": create_wall_dataloader(
+            data_path="/scratch/DL24FA/probe_wall/val",
+            probing=True,
+            device=device,
+            train=False
+        )
     }
 
     model = VicRegJEPA()
@@ -109,8 +138,8 @@ def main():
 
     train_jepa(
         model=model,
-        train_loader=train_dataset,
-        val_loader=val_dataset,
+        train_loader=train_loader,
+        val_loader=val_loader,
         probe_train_ds=probe_train_ds,
         probe_val_ds=probe_val,
         num_epochs=6,

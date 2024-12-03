@@ -17,7 +17,7 @@ def train_jepa(
         device: str = "cuda",
         save_path: str = "checkpoints",
         gradient_clip: float = 1.0,
-        validation_interval: int = 3,
+        validation_interval: int = 1,
         early_stopping_patience: int = 10,
         resume_from: Optional[str] = None
 ) -> None:
