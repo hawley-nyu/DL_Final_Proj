@@ -134,11 +134,12 @@ class VicRegJEPA(nn.Module):
     def forward(self, states, actions):
         B, T = states.shape[:2]
 
-        # For evaluator
+        # For evaluator mode (single initial state)
         if T == 1:
-            predictions = []
             s_pred = self.encoder(states[:, 0])
+            predictions = [s_pred]
 
+            # Recursive prediction using previous predictions
             for t in range(actions.shape[1]):
                 s_pred = self.predictor(s_pred, actions[:, t])
                 predictions.append(s_pred)
@@ -146,18 +147,18 @@ class VicRegJEPA(nn.Module):
             predictions = torch.stack(predictions, dim=1)
             return predictions, None
 
-        # For training
+        # For training mode
         predictions = []
         targets = []
         s_pred = self.encoder(states[:, 0])
+        predictions.append(s_pred)
+        targets.append(self.target_encoder(states[:, 0]))
 
+        # Teacher forcing with recursive prediction
         for t in range(T - 1):
             s_pred = self.predictor(s_pred, actions[:, t])
             predictions.append(s_pred)
-
-            with torch.no_grad():
-                target = self.target_encoder(states[:, t + 1])
-            targets.append(target)
+            targets.append(self.target_encoder(states[:, t + 1]))
 
         predictions = torch.stack(predictions, dim=1)
         targets = torch.stack(targets, dim=1)
