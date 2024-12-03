@@ -134,36 +134,35 @@ class VicRegJEPA(nn.Module):
     def forward(self, states, actions):
         B, T = states.shape[:2]
 
-        # For evaluator mode (single initial state)
         if T == 1:
-            s_pred = self.encoder(states[:, 0])
-            predictions = [s_pred]
+            # Eval mode - only initial state
+            predicted_state = self.encoder(states)
+            predictions = [predicted_state.squeeze(1)]
 
-            # Recursive prediction using previous predictions
+            # Recursive prediction
             for t in range(actions.shape[1]):
-                s_pred = self.predictor(s_pred, actions[:, t])
-                predictions.append(s_pred)
+                predicted_state = self.predictor(predicted_state.squeeze(1), actions[:, t])
+                predictions.append(predicted_state)
 
             predictions = torch.stack(predictions, dim=1)
             return predictions, None
 
-        # For training mode
-        predictions = []
-        targets = []
-        s_pred = self.encoder(states[:, 0])
-        predictions.append(s_pred)
-        targets.append(self.target_encoder(states[:, 0]))
+        else:
+            # Training mode - full trajectory
+            target_states = self.target_encoder(states[:, 1:])  # Skip first state
+            states = self.encoder(states[:, :-1])  # Skip last state
 
-        # Teacher forcing with recursive prediction
-        for t in range(T - 1):
-            s_pred = self.predictor(s_pred, actions[:, t])
-            predictions.append(s_pred)
-            targets.append(self.target_encoder(states[:, t + 1]))
+            predicted_states = [states[:, 0].clone()]
 
-        predictions = torch.stack(predictions, dim=1)
-        targets = torch.stack(targets, dim=1)
+            # Teacher forcing
+            for t in range(actions.size(1)):
+                predicted_state = self.predictor(states[:, t], actions[:, t])
+                predicted_states.append(predicted_state)
+                if t + 1 < states.size(1):
+                    states[:, t + 1] = predicted_state
 
-        return predictions, targets
+            predicted_states = torch.stack(predicted_states, dim=1)
+            return predicted_states, target_states
 
     def compute_loss(self, predictions, targets, std_min=0.1):
         # Invariance loss
