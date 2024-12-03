@@ -118,37 +118,53 @@ def off_diagonal(x):
 class VicRegJEPA(nn.Module):
     def __init__(self, sim_loss_weight=25.0, var_loss_weight=25.0, cov_loss_weight=1.0):
         super().__init__()
-        self.encoder = ConvEncoder()
+        self.encoder = ConvEncoder()  # Encθ
+        self.target_encoder = ConvEncoder()  # Encψ
         self.predictor = Predictor()
         self.sim_loss_weight = sim_loss_weight
         self.var_loss_weight = var_loss_weight
         self.cov_loss_weight = cov_loss_weight
+        self.repr_dim = 256
+
+        # Initialize target encoder with encoder weights
+        for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+            param_k.data.copy_(param_q.data)
+            param_k.requires_grad = False
 
     def forward(self, states, actions):
+        """
+        Args:
+            states: [B, T, Ch, H, W]
+            actions: [B, T-1, 2]
+        Returns:
+            predictions: [B, T-1, D]
+            targets: [B, T-1, D]
+        """
         B, T = states.shape[:2]
         predictions = []
         targets = []
 
-        # Initial state encoding
         s0 = self.encoder(states[:, 0])
         current_pred_state = s0
 
-        # Target encoder should be different from main encoder (BYOL style)
-        target_encoder = ConvEncoder().to(states.device)
-        s0_target = target_encoder(states[:, 0])
-        targets.append(s0_target)
-
-        # Recurrent predictions
         for t in range(T - 1):
+            # predictor get next state
             pred_next = self.predictor(current_pred_state, actions[:, t])
             predictions.append(pred_next)
-            current_pred_state = pred_next  # Use prediction for next step
+            current_pred_state = pred_next
 
-            target = target_encoder(states[:, t + 1])
+            # target_encoder to get target
+            with torch.no_grad():
+                target = self.target_encoder(states[:, t + 1])
             targets.append(target)
 
+        predictions = torch.stack(predictions, dim=1)
+        targets = torch.stack(targets, dim=1)
+
+        return predictions, targets
+
     def compute_loss(self, predictions, targets, std_min=0.1):
-        # Invariance loss (similarity)
+        # Invariance loss
         sim_loss = F.mse_loss(predictions, targets)
 
         # Variance loss

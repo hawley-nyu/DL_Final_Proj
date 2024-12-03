@@ -95,20 +95,22 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    # Load datasets
     train_loader = create_wall_dataloader(
         data_path="/scratch/DL24FA/train",
         probing=False,
         device=device,
-        train=True
+        train=True,
+        batch_size=32
     )
 
     val_loader = create_wall_dataloader(
         data_path="/scratch/DL24FA/train",
         probing=False,
         device=device,
-        train=False
+        train=False,
+        batch_size=32
     )
 
     probe_train_ds = create_wall_dataloader(
@@ -145,10 +147,7 @@ def main():
         num_epochs=6,
         initial_lr=2e-4,
         device=device,
-        save_path="checkpoints",
-        gradient_clip=1.0,
-        validation_interval=1,
-        early_stopping_patience=10
+        save_path="checkpoints"
     )
 
 
