@@ -176,7 +176,7 @@ class Encoder(nn.Module):
 
     
     def forward(self, x):
-        x = x.clone()
+        # x = x.clone()
         x[:, :, 1, :, :] = x[:, :, 0, :, :]
         B, T, C, H, W = x.size()
         y = x
