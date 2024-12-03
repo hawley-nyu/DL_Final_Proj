@@ -241,7 +241,7 @@ class JEPA(nn.Module):
         predicted_states = []
         predicted_states.append(encoded_states[0])
         for i in range(action_length):
-            prediction = self.predictor(predicted_states[:,i], actions[:,i]) # (bs, 256)
+            prediction = self.predictor(predicted_states[i], actions[:,i]) # (bs, 256)
             predicted_states.append(prediction)
         predicted_states = torch.stack(predicted_states, dim=0)  # (16, bs, 256)
 
