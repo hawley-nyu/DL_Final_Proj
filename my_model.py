@@ -176,6 +176,7 @@ class Encoder(nn.Module):
 
     
     def forward(self, x):
+        x = x.clone()
         x[:, :, 1, :, :] = x[:, :, 0, :, :]
         B, T, C, H, W = x.size()
         y = x
@@ -239,7 +240,7 @@ class JEPA(nn.Module):
         # encoded_target_states = encoded_target_states.view(bs, trajectory_length, 256).permute(1, 0, 2) # (17, bs, 256)
 
         predicted_states = []
-        predicted_states.append(encoded_states[:,0])
+        predicted_states.append(encoded_states[:,0].clone())
         for i in range(action_length):
             prediction = self.predictor(predicted_states[i], actions[:,i]) # (bs, 256)
             predicted_states.append(prediction)
