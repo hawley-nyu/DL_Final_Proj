@@ -94,63 +94,33 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('training.log'),
-            logging.StreamHandler()
-        ]
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    device = get_device()
+    train_dataset = WallDataset(split="train", batch_size=32)
+    val_dataset = WallDataset(split="val", batch_size=32)
+    probe_train_ds = WallDataset(split="probe_train", batch_size=32)
+    probe_val = {
+        "normal": WallDataset(split="probe_normal", batch_size=32),
+        "wall": WallDataset(split="probe_wall", batch_size=32)
+    }
 
-    full_dataset = create_wall_dataloader(
-        data_path="/scratch/DL24FA/train",
-        probing=False,
-        device=device,
-        train=True,
-        batch_size=32
-    )
-
-    train_size = int(0.9 * len(full_dataset.dataset))
-    val_size = len(full_dataset.dataset) - train_size
-    train_ds, val_ds = random_split(
-        full_dataset.dataset,
-        [train_size, val_size],
-        generator=torch.Generator().manual_seed(2000)
-    )
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=16,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=False,
-    )
-    val_loader = DataLoader(
-        val_ds,
-        batch_size=16,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=False,
-    )
-
-    model = VicRegJEPA().to(device)
-    probe_train_ds, probe_val_ds = load_data(device)
+    model = VicRegJEPA()
+    model.repr_dim = 256
 
     train_jepa(
         model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
+        train_loader=train_dataset,
+        val_loader=val_dataset,
         probe_train_ds=probe_train_ds,
-        probe_val_ds=probe_val_ds,
-        num_epochs=10,
-        initial_lr=1e-4,
+        probe_val_ds=probe_val,
+        num_epochs=6,
+        initial_lr=2e-4,
         device=device,
-        save_path="checkpoints"
+        save_path="checkpoints",
+        gradient_clip=1.0,
+        validation_interval=1,
+        early_stopping_patience=10
     )
-    evaluate_model(device, model, probe_train_ds, probe_val_ds)
 
 
 if __name__ == "__main__":

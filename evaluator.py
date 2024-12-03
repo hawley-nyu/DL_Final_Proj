@@ -38,6 +38,8 @@ default_config = ProbingConfig()
 
 
 def location_losses(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    #print(f'pred.shape {pred.shape}')
+    #print(f'target.shape {target.shape}')
     assert pred.shape == target.shape
     mse = (pred - target).pow(2).mean(dim=0)
     return mse
@@ -113,9 +115,10 @@ class ProbingEvaluator:
                 ################################################################################
                 # TODO: Forward pass through your model
                 init_states = batch.states[:, 0:1]  # BS, 1, C, H, W
-                pred_encs = model(states=init_states, actions=batch.actions)
+                pred_encs, _ = model(states=init_states, actions=batch.actions)
                 pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
 
+                #print(f'pred_encs {pred_encs.shape}')
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
 
@@ -126,7 +129,8 @@ class ProbingEvaluator:
 
                 losses_list = []
 
-                target = getattr(batch, "locations").cuda()
+                #target = getattr(batch, "locations").cuda()
+                target = getattr(batch, "locations").to(self.device)
                 target = self.normalizer.normalize_location(target)
 
                 if (
@@ -150,7 +154,8 @@ class ProbingEvaluator:
                         sampled_target_locs[i, :] = target[i, indices]
 
                     pred_encs = sampled_pred_encs
-                    target = sampled_target_locs.cuda()
+                    #target = sampled_target_locs.cuda()
+                    target = sampled_target_locs.to(device)
 
                 pred_locs = torch.stack([prober(x) for x in pred_encs], dim=1)
                 losses = location_losses(pred_locs, target)
@@ -178,6 +183,7 @@ class ProbingEvaluator:
     def evaluate_all(
         self,
         prober,
+        device='cuda',
     ):
         """
         Evaluates on all the different validation datasets
@@ -189,6 +195,7 @@ class ProbingEvaluator:
                 prober=prober,
                 val_ds=val_ds,
                 prefix=prefix,
+                device=device,
             )
 
         return avg_losses
@@ -199,6 +206,7 @@ class ProbingEvaluator:
         prober,
         val_ds,
         prefix="",
+        device='cuda',
     ):
         quick_debug = self.quick_debug
         config = self.config
@@ -211,14 +219,15 @@ class ProbingEvaluator:
             ################################################################################
             # TODO: Forward pass through your model
             init_states = batch.states[:, 0:1]  # BS, 1 C, H, W
-            pred_encs = model(states=init_states, actions=batch.actions)
+            pred_encs, _ = model(states=init_states, actions=batch.actions)
             # # BS, T, D --> T, BS, D
             pred_encs = pred_encs.transpose(0, 1)
 
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
 
-            target = getattr(batch, "locations").cuda()
+            #target = getattr(batch, "locations").cuda()
+            target = getattr(batch, "locations").to(device)
             target = self.normalizer.normalize_location(target)
 
             pred_locs = torch.stack([prober(x) for x in pred_encs], dim=1)

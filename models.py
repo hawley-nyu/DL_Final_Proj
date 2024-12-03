@@ -65,114 +65,111 @@ class Prober(torch.nn.Module):
         return output
 
 
-class VicRegJEPA(nn.Module):
-    def __init__(self, input_channels=2, hidden_dim=512, repr_dim=256):
+class ConvEncoder(nn.Module):
+    def __init__(self, in_channels=2, hidden_dim=64, output_dim=256):
         super().__init__()
-        self.repr_dim = repr_dim
+        self.conv1 = nn.Conv2d(in_channels, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim * 2, 3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim * 2, hidden_dim * 4, 3, padding=1)
+        self.pool = nn.MaxPool2d(2)
+        self.norm1 = nn.BatchNorm2d(hidden_dim)
+        self.norm2 = nn.BatchNorm2d(hidden_dim * 2)
+        self.norm3 = nn.BatchNorm2d(hidden_dim * 4)
+        self.fc = nn.Linear(hidden_dim * 4 * 8 * 8, output_dim)
 
-        self.encoder = nn.Sequential(
-            nn.Conv2d(input_channels, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(256, 256, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Flatten(),
-            nn.Linear(256 * 8 * 8, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, repr_dim)
-        )
+    def forward(self, x):
+        x = self.pool(F.relu(self.norm1(self.conv1(x))))  # 32x32
+        x = self.pool(F.relu(self.norm2(self.conv2(x))))  # 16x16
+        x = self.pool(F.relu(self.norm3(self.conv3(x))))  # 8x8
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
 
-        self.predictor = nn.Sequential(
-            nn.Linear(repr_dim + 2, hidden_dim),
+
+class Predictor(nn.Module):
+    def __init__(self, state_dim=256, action_dim=2, hidden_dim=256):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, repr_dim)
+            nn.Linear(hidden_dim, state_dim)
         )
 
-        self.projector = nn.Sequential(
-            nn.Linear(repr_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, repr_dim)
-        )
+    def forward(self, state, action):
+        x = torch.cat([state, action], dim=-1)
+        return self.net(x)
+
+
+def compute_covariance(x):
+    batch_size = x.shape[0]
+    x = x - x.mean(dim=0)
+    return (x.T @ x) / (batch_size - 1)
+
+
+def off_diagonal(x):
+    n = x.shape[0]
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+
+class VicRegJEPA(nn.Module):
+    def __init__(self, sim_loss_weight=25.0, var_loss_weight=25.0, cov_loss_weight=1.0):
+        super().__init__()
+        self.encoder = ConvEncoder()
+        self.predictor = Predictor()
+        self.sim_loss_weight = sim_loss_weight
+        self.var_loss_weight = var_loss_weight
+        self.cov_loss_weight = cov_loss_weight
 
     def forward(self, states, actions):
-        batch_size, seq_len = states.shape[:2]
-        # Copy trajectory channel over wall channel
-        states = states.clone()
-        states[:, :, 1, :, :] = states[:, :, 0, :, :]  #ignore the wall
-
-        states_flat = states.reshape(-1, *states.shape[2:])
-        encoded_states = self.encoder(states_flat)
-        encoded_states = encoded_states.reshape(batch_size, seq_len, -1)
-        encoded_states = encoded_states.transpose(0, 1)  # (BS, T, D) -> (T, BS, D)
-
+        B, T = states.shape[:2]
         predictions = []
-        current_state = encoded_states[0]
+        targets = []
 
-        for t in range(seq_len - 1):
-            state_action = torch.cat([current_state, actions[:, t]], dim=1)
-            next_state = self.predictor(state_action)
-            predictions.append(next_state)
-            current_state = next_state
+        # Initial state encoding
+        s0 = self.encoder(states[:, 0])
+        current_pred_state = s0
 
-        predictions = torch.stack(predictions, dim=0)  # (T-1, BS, D)
-        return encoded_states, predictions
+        # Target encoder should be different from main encoder (BYOL style)
+        target_encoder = ConvEncoder().to(states.device)
+        s0_target = target_encoder(states[:, 0])
+        targets.append(s0_target)
 
-    def compute_loss(self, pred, target):
-        # Match sequence length and batch size
-        seq_len = min(pred.shape[0], target.shape[0])
-        batch_size = min(pred.shape[1], target.shape[1])
-        pred = pred[:seq_len, :batch_size]
-        target = target[:seq_len, :batch_size]
+        # Recurrent predictions
+        for t in range(T - 1):
+            pred_next = self.predictor(current_pred_state, actions[:, t])
+            predictions.append(pred_next)
+            current_pred_state = pred_next  # Use prediction for next step
 
-        # Reshape and project
-        pred = pred.transpose(0, 1).reshape(-1, self.repr_dim)
-        target = target.transpose(0, 1).reshape(-1, self.repr_dim)
+            target = target_encoder(states[:, t + 1])
+            targets.append(target)
 
-        pred = self.projector(pred)
-        with torch.no_grad():
-            target = self.projector(target)
-
-        # Invariance loss
-        sim_loss = F.mse_loss(pred, target)
+    def compute_loss(self, predictions, targets, std_min=0.1):
+        # Invariance loss (similarity)
+        sim_loss = F.mse_loss(predictions, targets)
 
         # Variance loss
-        std_pred = torch.sqrt(pred.var(dim=0) + 0.0001)
-        std_target = torch.sqrt(target.var(dim=0) + 0.0001)
-        std_loss = torch.mean(F.relu(1 - std_pred)) + torch.mean(F.relu(1 - std_target))
+        std_pred = torch.sqrt(predictions.var(dim=0) + 1e-4)
+        std_target = torch.sqrt(targets.var(dim=0) + 1e-4)
+        var_loss = torch.mean(F.relu(std_min - std_pred)) + torch.mean(F.relu(std_min - std_target))
 
         # Covariance loss
-        pred_centered = pred - pred.mean(dim=0)
-        target_centered = target - target.mean(dim=0)
+        pred_cov = compute_covariance(predictions.reshape(-1, predictions.shape[-1]))
+        target_cov = compute_covariance(targets.reshape(-1, targets.shape[-1]))
 
-        pred_cov = (pred_centered.T @ pred_centered) / (pred.shape[0] - 1)
-        target_cov = (target_centered.T @ target_centered) / (target.shape[0] - 1)
+        cov_loss = off_diagonal(pred_cov).pow_(2).sum() / predictions.shape[-1] + \
+                   off_diagonal(target_cov).pow_(2).sum() / targets.shape[-1]
 
-        pred_cov_offdiag = pred_cov - torch.diag_embed(torch.diag(pred_cov))
-        target_cov_offdiag = target_cov - torch.diag_embed(torch.diag(target_cov))
+        total_loss = self.sim_loss_weight * sim_loss + \
+                     self.var_loss_weight * var_loss + \
+                     self.cov_loss_weight * cov_loss
 
-        cov_loss = (pred_cov_offdiag ** 2).sum() / pred.shape[1] + \
-                   (target_cov_offdiag ** 2).sum() / target.shape[1]
-
-        # Combined loss
-        loss = 10.0 * sim_loss + 20.0 * std_loss + 0.5 * cov_loss
-
-        return loss, {
-            'total_loss': loss.item(),
+        return total_loss, {
             'sim_loss': sim_loss.item(),
-            'std_loss': std_loss.item(),
-            'cov_loss': cov_loss.item()
+            'var_loss': var_loss.item(),
+            'cov_loss': cov_loss.item(),
+            'total_loss': total_loss.item()
         }
