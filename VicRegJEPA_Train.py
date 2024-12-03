@@ -108,12 +108,12 @@ def train_jepa(
         val_loader: DataLoader,
         probe_train_ds,
         probe_val_ds,
-        num_epochs: int = 10,
+        num_epochs: int = 3,
         initial_lr: float = 1e-4,
         device: str = "cuda",
         save_path: str = "checkpoints",
         gradient_clip: float = 0.5,
-        validation_interval: int = 5,
+        validation_interval: int = 3,
         early_stopping_patience: int = 7,
         resume_from: Optional[str] = None
 ) -> None:
