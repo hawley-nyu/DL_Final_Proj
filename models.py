@@ -78,18 +78,17 @@ class ConvEncoder(nn.Module):
         self.fc = nn.Linear(hidden_dim * 4 * 8 * 8, output_dim)
 
     def forward(self, x):
-        def forward(self, x):
-            B, T = x.shape[:2]
-            x = x.view(B * T, *x.shape[2:])
+        B, T = x.shape[:2]
+        x = x.view(B * T, *x.shape[2:])
 
-            x = self.pool(F.relu(self.norm1(self.conv1(x))))
-            x = self.pool(F.relu(self.norm2(self.conv2(x))))
-            x = self.pool(F.relu(self.norm3(self.conv3(x))))
-            x = x.view(x.size(0), -1)
-            x = self.fc(x)
-            x = x.view(B, T, -1)
+        x = self.pool(F.relu(self.norm1(self.conv1(x))))
+        x = self.pool(F.relu(self.norm2(self.conv2(x))))
+        x = self.pool(F.relu(self.norm3(self.conv3(x))))
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        x = x.view(B, T, -1)
 
-            return x
+        return x
 
 
 class Predictor(nn.Module):
