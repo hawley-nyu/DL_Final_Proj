@@ -30,7 +30,10 @@ class MockModel(torch.nn.Module):
     def forward(self, states, actions):
         """
         Args:
-            states: [B, 1, Ch, H, W]
+            During training:
+                states: [B, T, Ch, H, W]
+            During inference:
+                states: [B, 1, Ch, H, W]
             actions: [B, T-1, 2]
 
         Output:
@@ -137,33 +140,53 @@ class VicRegJEPA(nn.Module):
             param_k.requires_grad = False
 
     def forward(self, states, actions):
+        """
+        Args:
+            During training:
+                states: [B, T, Ch, H, W] - full trajectory
+            During inference:
+                states: [B, 1, Ch, H, W] - only initial state
+            actions: [B, T-1, 2]
+        """
         B, T = states.shape[:2]
 
         if T == 1:
-            predicted_state = self.encoder(states)
-            predictions = [predicted_state.squeeze(1)]
+            # Copy trajectory channel over wall channel
+            states[:, :, 1, :, :] = states[:, :, 0, :, :]
+
+            # Inference mode - only have access to initial state
+            current_state = self.encoder(states).squeeze(1)  # [B, D]
+            predictions = [current_state]
 
             for t in range(actions.shape[1]):
-                predicted_state = self.predictor(predictions[-1], actions[:, t])
-                predictions.append(predicted_state)
+                current_state = self.predictor(current_state, actions[:, t])
+                predictions.append(current_state)
 
-            predictions = torch.stack(predictions, dim=1)
+            predictions = torch.stack(predictions, dim=1)  # [B, T, D]
             return predictions, None
 
         else:
-            target_states = self.target_encoder(states[:, 1:])
-            encoded_states = self.encoder(states[:, :-1])
+            # Training mode - have access to full trajectory
 
-            # 确保只生成与target_states相同数量的预测
+            # Copy trajectory channel over wall channel
+            states[:, :, 1, :, :] = states[:, :, 0, :, :]
+
+            # Need target representations for loss calculation
+            target_states = self.target_encoder(states)  # [B, T, D]
+            encoded_states = self.encoder(states)  # [B, T, D]
+
+            # Predict next states using current state + action
             predicted_states = []
-            current_state = encoded_states[:, 0]
+            current_state = encoded_states[:, 0]  # Start with initial encoded state
 
-            for t in range(target_states.size(1)):
-                current_state = self.predictor(current_state, actions[:, t])
-                predicted_states.append(current_state)
+            # For each timestep, predict next state and add to predictions
+            for t in range(T - 1):
+                next_state = self.predictor(current_state, actions[:, t])
+                predicted_states.append(next_state)
+                current_state = next_state  # Use prediction as next input
 
-            predicted_states = torch.stack(predicted_states, dim=1)
-            return predicted_states, target_states
+            predicted_states = torch.stack(predicted_states, dim=1)  # [B, T-1, D]
+            return predicted_states, target_states[:, 1:]  # Only return target states from t+1
 
     def compute_loss(self, predictions, targets, std_min=0.1):
         # Invariance loss
