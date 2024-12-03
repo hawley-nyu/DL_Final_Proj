@@ -3,6 +3,8 @@ from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from evaluator import ProbingEvaluator
+from typing import Optional, Dict, Any
+from pathlib import Path
 
 def train_jepa(
         model: torch.nn.Module,
