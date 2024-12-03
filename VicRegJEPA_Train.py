@@ -27,6 +27,38 @@ class EarlyStopping:
 
         return self.counter >= self.patience
 
+
+def validate_model(model, val_loader, probe_train_ds, probe_val_ds, device):
+    model.eval()
+    val_loss = 0
+
+    with torch.no_grad():
+        for batch in val_loader:
+            states = batch.states.to(device)
+            actions = batch.actions.to(device)
+            predictions, targets = model(states=states, actions=actions)
+            loss, _ = model.compute_loss(predictions, targets)
+            val_loss += loss.item()
+
+    val_loss /= len(val_loader)
+
+    evaluator = ProbingEvaluator(
+        device=device,
+        model=model,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
+        quick_debug=False
+    )
+
+    prober = evaluator.train_pred_prober()
+    val_probe_losses = evaluator.evaluate_all(prober=prober)
+
+    return {
+        "val_loss": val_loss,
+        "probe_losses": val_probe_losses
+    }
+
+
 def train_jepa(
         model: torch.nn.Module,
         train_loader: DataLoader,
@@ -118,3 +150,4 @@ def train_jepa(
                 break
 
         scheduler.step()
+        return model

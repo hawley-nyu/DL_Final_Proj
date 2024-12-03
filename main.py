@@ -138,7 +138,7 @@ def main():
     model = VicRegJEPA()
     model.repr_dim = 256
 
-    train_jepa(
+    trained_model = train_jepa(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -150,6 +150,7 @@ def main():
         save_path="checkpoints"
     )
 
+    evaluate_model(device, trained_model, probe_train_ds, probe_val_ds)
 
 if __name__ == "__main__":
     main()
