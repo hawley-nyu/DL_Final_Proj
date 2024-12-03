@@ -141,17 +141,27 @@ class VicRegJEPA(nn.Module):
             targets: [B, T-1, D]
         """
         B, T = states.shape[:2]
-        if T == 1:  # only 1 time step
+        if T == 1:
+            predictions = []
             s0 = self.encoder(states[:, 0])
-            return s0.unsqueeze(1), s0.unsqueeze(1)
+            current_pred_state = s0
 
+            # action for prediction
+            for t in range(actions.shape[1]):
+                pred_next = self.predictor(current_pred_state, actions[:, t])
+                predictions.append(pred_next)
+                current_pred_state = pred_next
+
+            predictions = torch.stack(predictions, dim=0)  # [T, B, D]
+            return predictions, None
+
+            #training
         predictions = []
         targets = []
-
         s0 = self.encoder(states[:, 0])
         current_pred_state = s0
 
-        for t in range(min(T - 1, actions.shape[1])):  # 确保不超出actions长度
+        for t in range(T - 1):
             pred_next = self.predictor(current_pred_state, actions[:, t])
             predictions.append(pred_next)
             current_pred_state = pred_next
@@ -160,7 +170,7 @@ class VicRegJEPA(nn.Module):
                 target = self.target_encoder(states[:, t + 1])
             targets.append(target)
 
-        predictions = torch.stack(predictions, dim=1)
+        predictions = torch.stack(predictions, dim=1)  # [B, T, D]
         targets = torch.stack(targets, dim=1)
 
         return predictions, targets
