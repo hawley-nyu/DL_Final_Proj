@@ -140,31 +140,27 @@ class VicRegJEPA(nn.Module):
         B, T = states.shape[:2]
 
         if T == 1:
-            # Eval mode - only initial state
             predicted_state = self.encoder(states)
             predictions = [predicted_state.squeeze(1)]
 
-            # Recursive prediction
             for t in range(actions.shape[1]):
-                predicted_state = self.predictor(predicted_state.squeeze(1), actions[:, t])
+                predicted_state = self.predictor(predictions[-1], actions[:, t])
                 predictions.append(predicted_state)
 
             predictions = torch.stack(predictions, dim=1)
             return predictions, None
 
         else:
-            # Training mode - full trajectory
-            target_states = self.target_encoder(states[:, 1:])  # Skip first state
-            states = self.encoder(states[:, :-1])  # Skip last state
+            target_states = self.target_encoder(states[:, 1:])
+            encoded_states = self.encoder(states[:, :-1])
 
-            predicted_states = [states[:, 0].clone()]
+            # 确保只生成与target_states相同数量的预测
+            predicted_states = []
+            current_state = encoded_states[:, 0]
 
-            # Teacher forcing
-            for t in range(actions.size(1)):
-                predicted_state = self.predictor(states[:, t], actions[:, t])
-                predicted_states.append(predicted_state)
-                if t + 1 < states.size(1):
-                    states[:, t + 1] = predicted_state
+            for t in range(target_states.size(1)):
+                current_state = self.predictor(current_state, actions[:, t])
+                predicted_states.append(current_state)
 
             predicted_states = torch.stack(predicted_states, dim=1)
             return predicted_states, target_states
