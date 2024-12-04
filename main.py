@@ -1,31 +1,42 @@
-import os
-import logging
-from pathlib import Path
-from typing import Tuple
-
 from dataset import create_wall_dataloader
 from evaluator import ProbingEvaluator
+from train import train_low_energy_two_model
 import torch
 from models import MockModel
+from models import LowEnergyTwoModel
 import glob
-
-from tqdm import tqdm
-from models import VicRegJEPA
-from torch.utils.data import DataLoader, random_split
-
-from VicRegJEPA_Train import train_vicreg
+import torch.optim as optim
 import argparse
 
 
-def get_device():
+def get_device(local=False):
     """Check for GPU availability."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if local:
+        device = torch.device("mps" if torch.backends.mps.is_available() else device)
     print("Using device:", device)
     return device
 
+def load_training_data(device, local=False):
+    if local:
+        data_path="/Users/patrick/data/train"
+    else:
+        data_path="/scratch/DL24FA/train"
 
-def load_data(device):
-    data_path = "/scratch/DL24FA"
+    train_ds = create_wall_dataloader(
+        data_path=f"{data_path}",
+        probing=False,
+        device=device,
+        train=True,
+    )
+
+    return train_ds
+
+def load_data(device, local=False):
+    if local:
+        data_path="/Users/patrick/data"
+    else:
+        data_path="/scratch/DL24FA"
 
     probe_train_ds = create_wall_dataloader(
         data_path=f"{data_path}/probe_normal/train",
@@ -53,23 +64,13 @@ def load_data(device):
     return probe_train_ds, probe_val_ds
 
 
-'''def load_model():
+def load_model(device='cuda', local=False):
     """Load or initialize the model."""
-    # TODO: Replace MockModel with your trained model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = VicRegJEPA().to(device)
-    model.load_state_dict(torch.load('model_weights.pth'))
-    model.eval()
-    return model'''
+    # model = MockModel()
+    model = LowEnergyTwoModel(device=device, repr_dim=256).to(device)
+    model.load_state_dict(torch.load("best_model.pth", weights_only=True))
+    return model
 
-def load_model(checkpoint_path=None):
-   device = get_device()
-   model = VicRegJEPA().to(device)
-   if checkpoint_path:
-       model.load_state_dict(torch.load(checkpoint_path))
-       logging.info(f"Loaded checkpoint from {checkpoint_path}")
-   model.eval()
-   return model
 
 def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     evaluator = ProbingEvaluator(
@@ -82,71 +83,54 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
 
     prober = evaluator.train_pred_prober()
 
-    avg_losses = evaluator.evaluate_all(prober=prober)
+    avg_losses = evaluator.evaluate_all(prober=prober, device=device)
 
     for probe_attr, loss in avg_losses.items():
         print(f"{probe_attr} loss: {loss}")
 
-'''if __name__ == "__main__":
-    device = get_device()
-    probe_train_ds, probe_val_ds = load_data(device)
-    model = load_model()
-    evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
-
-
-def load_training_data(device):
-
-    data_path="/scratch/DL24FA/train"
-
-    train_ds = create_wall_dataloader(
-        data_path=f"{data_path}",
-        probing=False,
-        device=device,
-        train=True,
-    )
-
-    return train_ds
-
 if __name__ == "__main__":
-    # Configuration
-    num_epochs = 6
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", action="store_true", help="train model and save .pth file")
+    parser.add_argument("--local", action="store_true", help="run on OS X")
+    parser.add_argument("--test", action="store_true", help="test mode")
+    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs (default: 1)")
+    args = parser.parse_args()
+
+    num_epochs = args.epochs
+    train_only = args.train
+    local = args.local
+    test_mode = args.test
     learning_rate = 1e-4
     repr_dim = 256
 
-    device = get_device()
-    print(f'Configuration:')
+
+    device = get_device(local=local)
     print(f'Epochs = {num_epochs}')
+    print(f'Local execution = {local}')
     print(f'Learning rate = {learning_rate}')
     print(f'Representation dimension = {repr_dim}')
 
-    # Training
-    print('Training VicReg model')
-    model = VicRegJEPA(device=device, repr_dim=repr_dim, training=True).to(device)
-    train_loader = load_training_data(device=device)
-    val_loader = load_training_data(device=device)  # Using same data for validation
-    probe_train_ds, probe_val_ds = load_data(device)
+    if train_only:
+        print('Training low energy model')
+        model = LowEnergyTwoModel(device=device, repr_dim=repr_dim).to(device)
+        train_loader = load_training_data(device=device, local=local) 
 
-    model = train_vicreg(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        probe_train_ds=probe_train_ds,
-        probe_val_ds=probe_val_ds,
-        num_epochs=num_epochs,
-        initial_lr=learning_rate,
-        device=device,
-        save_path="checkpoints"
-    )
+        predicted_states, target_states = train_low_energy_two_model(
+            model=model,
+            train_loader=train_loader,
+            num_epochs=num_epochs,
+            learning_rate=learning_rate,
+            device=device,
+            test_mode=test_mode,
+        )
+        print()
+        print('Saving low energy model in best_model.pth')
+        torch.save(model.state_dict(), "best_model.pth")
 
-    print('Evaluating model')
-    evaluate_model(device, model, probe_train_ds, probe_val_ds)
-'''if __name__ == "__main__":
-    main()
-    model = VicRegJEPA().to(device)
-    train_jepa(model, train_ds)
-
-    # Evaluate trained model
-    probe_train_ds, probe_val_ds = load_data(device)
-    evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
-
-
+    else: 
+        # evaluate the model
+        print('Evaluating best_model.pth')
+        probe_train_ds, probe_val_ds = load_data(device, local=local)
+        model = load_model(device=device, local=local)
+        evaluate_model(device, model, probe_train_ds, probe_val_ds)

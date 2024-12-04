@@ -30,24 +30,22 @@ class MockModel(torch.nn.Module):
     def forward(self, states, actions):
         """
         Args:
-            During training:
-                states: [B, T, Ch, H, W]
-            During inference:
-                states: [B, 1, Ch, H, W]
+            states: [B, T, Ch, H, W]
             actions: [B, T-1, 2]
 
         Output:
             predictions: [B, T, D]
         """
-        return torch.randn((self.bs, self.n_steps, self.repr_dim)).to(self.device)
+        r = torch.randn((self.bs, self.n_steps, self.repr_dim)).to(self.device)
+        return r
 
 
 class Prober(torch.nn.Module):
     def __init__(
-        self,
-        embedding: int,
-        arch: str,
-        output_shape: List[int],
+            self,
+            embedding: int,
+            arch: str,
+            output_shape: List[int],
     ):
         super().__init__()
         self.output_dim = np.prod(output_shape)
@@ -68,12 +66,14 @@ class Prober(torch.nn.Module):
         return output
 
 
-class VicRegJEPA(nn.Module):
-    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256, training=False):
+class LowEnergyTwoModel(nn.Module):
+
+    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256):
         super().__init__()
         self.encoder = Encoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
         self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
         self.target_encoder = TargetEncoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
+        # self.encoder.cnn = self.target_encoder.cnn # try weight sharing
         self.device = device
         self.bs = bs
         self.n_steps = n_steps
@@ -81,68 +81,50 @@ class VicRegJEPA(nn.Module):
         self.action_dim = 2
         self.state_dim = (2, 64, 64)
         self.output_dim = output_dim
-        self.training = training
 
     def forward(self, states, actions):
-        if self.training:
-            # Copy trajectory channel over wall channel
-            states[:, :, 1, :, :] = states[:, :, 0, :, :]
+        target_states = self.target_encoder(states[:, 1:])  # skip first observation
+        states = self.encoder(states[:, :-1])  # skip last observation
 
-            target_states = self.target_encoder(states[:, 1:])  # skip first observation
-            states = self.encoder(states[:, :-1])  # skip last observation
+        predicted_states = [states[:, 0].clone()]
+        for t in range(actions.size(1)):
+            predicted_state = self.predictor(states[:, t], actions[:, t])
+            predicted_states.append(predicted_state)
+            if t + 1 < states.size(1):
+                states[:, t + 1] = predicted_state  # teacher forcing
 
-            predicted_states = [states[:, 0].clone()]
-            for t in range(actions.size(1)):
-                predicted_state = self.predictor(states[:, t], actions[:, t])
-                predicted_states.append(predicted_state)
-                if t + 1 < states.size(1):
-                    states[:, t + 1] = predicted_state  # teacher forcing
+        predicted_states = torch.stack(predicted_states, dim=1)
 
-            predicted_states = torch.stack(predicted_states, dim=1)
-            return predicted_states, target_states
+        return predicted_states, target_states
 
-        else:
-            # Copy trajectory channel over wall channel
-            states[:, :, 1, :, :] = states[:, :, 0, :, :]
-
-            predicted_state = self.encoder(states)
-            predicted_states = [predicted_state.squeeze(1)]
-            for t in range(actions.size(1)):
-                predicted_state = self.predictor(predicted_state.squeeze(1), actions[:, t])
-                predicted_states.append(predicted_state)
-
-            predicted_states = torch.stack(predicted_states, dim=1)
-            return predicted_states, None
+    def contrastive_loss(self, predicted_states, target_states):
+        predicted_states = F.normalize(predicted_states, dim=-1)
+        target_states = F.normalize(target_states, dim=-1)
+        similarity = torch.matmul(predicted_states, target_states.transpose(-1, -2))
+        batch_size, seq_len, _ = predicted_states.size()
+        positive_pairs = torch.diagonal(similarity, offset=0, dim1=-1, dim2=-2).mean()
+        negative_pairs = similarity.mean() - positive_pairs
+        return -positive_pairs + negative_pairs
 
     def loss(self, predicted_states, target_states):
-        predicted_states = predicted_states[:, 1:]  # Remove initial state
-
-        # Invariance (MSE) loss
-        sim_loss = F.mse_loss(predicted_states, target_states)
-
-        # Variance loss
-        std_p = torch.sqrt(predicted_states.var(dim=0) + 1e-4)
-        std_t = torch.sqrt(target_states.var(dim=0) + 1e-4)
-        var_loss = torch.mean(F.relu(1 - std_p)) + torch.mean(F.relu(1 - std_t))
-
-        # Covariance loss
-        B, T, D = target_states.size()
-        pred_flat = predicted_states.view(-1, D)
-        target_flat = target_states.view(-1, D)
-
-        pred_cov = torch.cov(pred_flat.T)
-        target_cov = torch.cov(target_flat.T)
-
-        cov_loss = (pred_cov.fill_diagonal_(0).pow(2).sum() / D +
-                    target_cov.fill_diagonal_(0).pow(2).sum() / D)
-
-        return sim_loss + var_loss + 0.1 * cov_loss
+        predicted_states = predicted_states[:, 1:]
+        mse_loss = F.mse_loss(predicted_states, target_states)
+        variance = target_states.var(dim=0).mean()
+        var_loss = F.relu(1e-2 - variance).mean()
+        B, T, repr_dim = target_states.size()
+        flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
+        cov = torch.cov(flattened_states.T)
+        # cov = torch.cov(target_states.T)
+        cov_loss = (cov.fill_diagonal_(0).pow(2).sum() / cov.size(0))
+        # contrastive = self.contrastive_loss(predicted_states, target_states)
+        return mse_loss + var_loss  # + cov_loss #+ .1*contrastive
 
 
 class Encoder(nn.Module):
     def __init__(self, input_shape, repr_dim=256):
         super().__init__()
 
+        # calculate linear layer input size
         C, H, W = input_shape
         H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1
         H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1
@@ -159,20 +141,21 @@ class Encoder(nn.Module):
         self.skip_fc = nn.Linear(C * input_shape[1] * input_shape[2], repr_dim)
 
     def forward(self, x):
+        # x[:, :, 0, :, :] *= 1000 # the numbers are really small
+        x[:, :, 1, :, :] = x[:, :, 0, :, :]  # copy trajectory channel over wall channel
+
         B, T, C, H, W = x.size()
         y = x
-
-        # Main path
         x = x.contiguous().view(B * T, C, H, W)
         x = self.cnn(x)
         x = self.flatten(x)
         x = self.fc(x)
-        x = x.view(B, T, -1)
+        x = x.view(B, T, -1)  # [B, T, repr_dim]
 
-        # Skip connection
-        y = y.contiguous().view(B * T, -1)
+        # skip connection
+        y = y.contiguous().view(B * T, -1)  # [B * T, C * H * W]
         y = self.skip_fc(y)
-        y = y.view(B, T, -1)
+        y = y.view(B, T, -1)  # Reshape back to [B, T, repr_dim]
 
         return x + y
 
@@ -187,8 +170,9 @@ class Predictor(nn.Module):
         )
 
     def forward(self, state, action):
-        x = torch.cat([state, action], dim=-1)
-        return self.fc(x)
+        x = torch.cat([state, action], dim=1)
+        x = self.fc(x)
+        return x
 
 
 class TargetEncoder(Encoder):
