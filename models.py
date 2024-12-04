@@ -73,7 +73,6 @@ class LowEnergyTwoModel(nn.Module):
         self.encoder = Encoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
         self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
         self.target_encoder = TargetEncoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
-        #self.encoder.cnn = self.target_encoder.cnn # try weight sharing
         self.device = device
         self.bs = bs
         self.n_steps = n_steps
@@ -113,17 +112,6 @@ class LowEnergyTwoModel(nn.Module):
 
             return predicted_states, None
     
-
-
-    def contrastive_loss(self, predicted_states, target_states):
-        predicted_states = F.normalize(predicted_states, dim=-1)
-        target_states = F.normalize(target_states, dim=-1)
-        similarity = torch.matmul(predicted_states, target_states.transpose(-1, -2))
-        batch_size, seq_len, _ = predicted_states.size()
-        positive_pairs = torch.diagonal(similarity, offset=0, dim1=-1, dim2=-2).mean()
-        negative_pairs = similarity.mean() - positive_pairs
-        return -positive_pairs + negative_pairs
-
     def loss(self, predicted_states, target_states):
         predicted_states = predicted_states[:, 1:]
         mse_loss = F.mse_loss(predicted_states, target_states)
@@ -132,10 +120,8 @@ class LowEnergyTwoModel(nn.Module):
         B, T, repr_dim = target_states.size()
         flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
         cov = torch.cov(flattened_states.T)
-        #cov = torch.cov(target_states.T)
         cov_loss = (cov.fill_diagonal_(0).pow(2).sum() / cov.size(0))
-        #contrastive = self.contrastive_loss(predicted_states, target_states)
-        return mse_loss + var_loss #+ cov_loss #+ .1*contrastive
+        return mse_loss + var_loss #+ cov_loss
 
 
 class Encoder(nn.Module):
@@ -160,7 +146,6 @@ class Encoder(nn.Module):
 
     
     def forward(self, x):
-        #x[:, :, 0, :, :] *= 1000 # the numbers are really small
         x[:, :, 1, :, :] = x[:, :, 0, :, :] # copy trajectory channel over wall channel
         
         B, T, C, H, W = x.size()

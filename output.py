@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import matplotlib
 #matplotlib.use('Agg')
@@ -14,8 +15,6 @@ def print_sample(sample):
     for t in range(steps):
         print_image(position_channel[t], walls_channel[t])
 
-    #plot_image(position_channel[1], walls_channel[1])
-    #plot_trajectory(position_channel, walls_channel)
     plot_full_trajectory(position_channel, walls_channel)
 
 def print_image(position, walls):
@@ -89,4 +88,38 @@ def plot_full_trajectory(position_channel, walls_channel):
     fig.savefig("traject.png")
     plt.close(fig)
 
+def plot_state_norms(predicted_states, target_states):
+    predicted_norms = torch.norm(predicted_states, dim=-1).view(-1).detach().cpu().numpy()
+    target_norms = torch.norm(target_states, dim=-1).view(-1).detach().cpu().numpy()
+    plt.figure(figsize=(8, 6))
+    plt.hist(predicted_norms, bins=50, alpha=0.5, label="Predicted States")
+    plt.hist(target_norms, bins=50, alpha=0.5, label="Target States")
+    plt.legend()
+    plt.title("Norm Distributions of Predicted and Target States")
+    plt.xlabel("Norm")
+    plt.ylabel("Frequency")
+    plt.show()
+
+def plot_gradient_norms(gradient_norms):
+    plt.figure(figsize=(10, 6))
+    for part, norms in gradient_norms.items():
+        plt.plot(norms, label=part) 
+    plt.title("Gradient Norms Over Training")
+    plt.xlabel("Iteration")
+    plt.ylabel("Mean Gradient Norm")
+    plt.legend()
+    plt.show()
+
+def collect_gradient_norms(model):
+    norms = {"encoder": 0, "target_encoder": 0, "predictor": 0}
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.norm().item()
+            if "encoder" in name and "target_encoder" not in name:  # Encoder
+                norms["encoder"] += grad_norm
+            elif "target_encoder" in name:  # Target Encoder
+                norms["target_encoder"] += grad_norm
+            elif "predictor" in name:  # Predictor
+                norms["predictor"] += grad_norm
+    return norms
 
