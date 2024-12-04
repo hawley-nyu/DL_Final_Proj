@@ -33,14 +33,17 @@ def save_checkpoint(model, optimizer, epoch, metrics, path):
     }, path)
     print(f"Checkpoint saved to {path}")
 
+
 def validate_model(model, val_loader, probe_train_ds, probe_val_ds, device):
     model.eval()
     val_loss = 0
 
     with torch.no_grad():
         for batch in val_loader:
-            states = batch['states'].to(device)
-            actions = batch['actions'].to(device)
+            states, actions = batch
+            states = states.to(device)
+            actions = actions.to(device)
+
             predictions, targets = model(states=states, actions=actions, training=True)
             loss = model.loss(predictions, targets)
             val_loss += loss.item()
@@ -97,8 +100,10 @@ def train_vicreg(
         with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}") as pbar:
             for batch_idx, batch in enumerate(pbar):
                 optimizer.zero_grad()
-                states = batch['states'].to(device)
-                actions = batch['actions'].to(device)
+                # 修改这里：假设batch是一个tuple，包含states和actions
+                states, actions = batch
+                states = states.to(device)
+                actions = actions.to(device)
 
                 predictions, targets = model(states=states, actions=actions, training=True)
                 loss = model.loss(predictions, targets)
