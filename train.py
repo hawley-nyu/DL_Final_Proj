@@ -10,7 +10,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     progress_bar = tqdm(range(num_epochs * len(train_loader)))
-    for epoch in tqdm(range(num_epochs)):
+    for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0.0
 
