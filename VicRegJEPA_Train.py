@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 class EarlyStopping:
-    def __init__(self, patience=7, min_delta=0, verbose=False):
+    def __init__(self, patience=3, min_delta=0, verbose=False):
 
         self.patience = patience
         self.min_delta = min_delta
