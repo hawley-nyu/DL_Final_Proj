@@ -9,7 +9,6 @@ from output import plot_state_norms, plot_gradient_norms, collect_gradient_norms
 def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate=1e-4, device="cuda", test_mode=False, plot=False):
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    progress_bar = tqdm(range(num_epochs * len(train_loader)))
     for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0.0
@@ -35,7 +34,6 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
 
             optimizer.step()
             epoch_loss += loss.item()
-            progress_bar.update(1)
 
             count = count + 1
             if test_mode and count > 10:
