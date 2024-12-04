@@ -115,7 +115,6 @@ if __name__ == "__main__":
         )
         print()
         print('Saving low energy model in best_model.pth')
-        torch.save(model.state_dict(), "best_model.pth")
 
     else:
         # evaluate the model
