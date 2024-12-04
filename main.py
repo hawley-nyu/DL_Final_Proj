@@ -93,6 +93,20 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     model = load_model()
     evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
 
+
+def load_training_data(device):
+
+    data_path="/scratch/DL24FA/train"
+
+    train_ds = create_wall_dataloader(
+        data_path=f"{data_path}",
+        probing=False,
+        device=device,
+        train=True,
+    )
+
+    return train_ds
+
 if __name__ == "__main__":
     # Configuration
     num_epochs = 6
