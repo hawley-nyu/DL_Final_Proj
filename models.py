@@ -72,9 +72,10 @@ class LowEnergyTwoModel(nn.Module):
 
     def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256, training=False):
         super().__init__()
-        self.encoder = Encoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
+        self.encoder = Encoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
         self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
-        self.target_encoder = TargetEncoder(input_shape=(2, 65, 65), repr_dim=repr_dim)
+        self.target_encoder = TargetEncoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
+        self.wall_encoder = WallEncoder(input_shape=(1, 65, 65), repr_dim=128)
         self.device = device
         self.bs = bs
         self.n_steps = n_steps
@@ -86,33 +87,25 @@ class LowEnergyTwoModel(nn.Module):
     
     def forward(self, states, actions):
 
+        bs, action_length, action_dim = actions.shape
+        trajectory = states[:,:,0:1,:,:].clone() # first channel
+        wall = states[:,:,1:,:,:].clone() # second channel
+        encoded_states = self.encoder(trajectory[:,:1]) # only needs to encode the initial state
+        encoded_wall = self.wall_encoder(wall[:, :1]) # only needs to encode the initial state
+
+        predicted_states = []
+        predicted_states.append(encoded_states[:,0])
+        for i in range(action_length):
+            prediction = self.predictor(predicted_states[i], actions[:,i], encoded_wall)
+            predicted_states.append(prediction)
+        predicted_states = torch.stack(predicted_states, dim=1)  # (17, bs, 256)
+
+        encoded_target_states = None
         if self.training:
-            # the input states include each step in the trajectory
-            target_states = self.target_encoder(states[:, 1:])  # skip first observation
-            states = self.encoder(states[:, :-1])  # skip last observation
+            encoded_target_states = self.target_encoder(trajectory[:, :-1])
 
-            predicted_states = [states[:, 0].clone()]
-            for t in range(actions.size(1)):
-                predicted_state = self.predictor(states[:, t], actions[:, t])
-                predicted_states.append(predicted_state)
-                if t + 1 < states.size(1):
-                    states[:, t + 1] = predicted_state  # teacher forcing
+        return predicted_states, encoded_target_states
 
-            predicted_states = torch.stack(predicted_states, dim=1)
-
-            return predicted_states, target_states
-
-        else:
-            # the input states only include the first step in the trajectory
-            predicted_state = self.encoder(states)
-            predicted_states = [predicted_state.squeeze(1)]
-            for t in range(actions.size(1)):
-                predicted_state = self.predictor(predicted_state.squeeze(1), actions[:, t])
-                predicted_states.append(predicted_state)
-
-            predicted_states = torch.stack(predicted_states, dim=1)
-
-            return predicted_states, None
     
     def loss(self, predicted_states, target_states):
         predicted_states = predicted_states[:, 1:]
@@ -148,8 +141,7 @@ class Encoder(nn.Module):
 
     
     def forward(self, x):
-        x[:, :, 1, :, :] = x[:, :, 0, :, :] # copy trajectory channel over wall channel
-        
+
         B, T, C, H, W = x.size()
         y = x
         x = x.contiguous().view(B * T, C, H, W)
@@ -166,20 +158,58 @@ class Encoder(nn.Module):
         return x + y
 
 class Predictor(nn.Module):
-    def __init__(self, repr_dim=256, action_dim=2):
+    def __init__(self, repr_dim=256, action_dim=32, wall_dim=128):
         super().__init__()
+
+        self.action_embedding = nn.Sequential(
+            nn.Linear(2, action_dim),
+            nn.ReLU()
+        )
+
         self.fc = nn.Sequential(
-            nn.Linear(repr_dim + action_dim, repr_dim),
+            nn.Linear(repr_dim + action_dim + wall_dim, repr_dim * 2),
             nn.ReLU(),
-            nn.Linear(repr_dim, repr_dim)
+            nn.Linear(repr_dim * 2, repr_dim)
         )
     
-    def forward(self, state, action):
-        x = torch.cat([state, action], dim=1)
+    def forward(self, state, action, wall):
+        action = self.action_embedding(action)
+        x = torch.cat([state, action, wall.squeeze(1)], dim=1)
         x = self.fc(x)
         return x
 
 class TargetEncoder(Encoder):
     def __init__(self, input_shape, repr_dim=256):
         super().__init__(input_shape, repr_dim)
+
+
+class WallEncoder(nn.Module):
+    def __init__(self, input_shape=(1, 65, 65), repr_dim=128):
+        super().__init__()
+
+        # Calculate linear layer input size
+        C, H, W = input_shape  # (C=1, H=65, W=65)
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1  # After first conv (stride=2)
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1  # After second conv (stride=2)
+        fc_input_dim = H * W * 64  # Final flattened size
+
+        # Define CNN and fully connected layers
+        self.cnn = nn.Sequential(
+            nn.Conv2d(C, 32, kernel_size=3, stride=2, padding=1),  # Input channels = 1
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(fc_input_dim, repr_dim)  # Output size = 128
+
+    def forward(self, x):
+        
+        B, T, C, H, W = x.size()  # Expect input shape (batch_size, 1, 1, 65, 65)
+        x = x.contiguous().view(B * T, C, H, W)  # Combine batch and time dimensions
+        x = self.cnn(x)  # Apply CNN
+        x = self.flatten(x)  # Flatten to (B*T, fc_input_dim)
+        x = self.fc(x)  # Apply fully connected layer
+        x = x.view(B, T, -1)  # Reshape to (batch_size, 1, repr_dim=128)
+        return x
 

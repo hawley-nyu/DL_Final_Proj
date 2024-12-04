@@ -35,6 +35,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
 
             optimizer.step()
             epoch_loss += loss.item()
+            progress_bar.update(1)
 
             count = count + 1
             if test_mode and count > 10:
