@@ -19,7 +19,7 @@ def get_device(local=False):
 
 def load_training_data(device, local=False):
     if local:
-        data_path="./train" #/Users/patrick/data/train"
+        data_path="/Users/patrick/data/train"
     else:
         data_path="/scratch/DL24FA/train"
 

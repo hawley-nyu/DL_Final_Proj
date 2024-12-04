@@ -116,7 +116,6 @@ class ProbingEvaluator:
                 pred_encs, _ = model(states=init_states, actions=batch.actions)
                 pred_encs = pred_encs.transpose(0, 1)  # # BS, T, D --> T, BS, D
 
-                #print(f'pred_encs {pred_encs.shape}')
                 # Make sure pred_encs has shape (T, BS, D) at this point
                 ################################################################################
 
