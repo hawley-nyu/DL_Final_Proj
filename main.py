@@ -93,67 +93,50 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
 
 
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-
-    train_loader = create_wall_dataloader(
-        data_path="/scratch/DL24FA/train",
-        probing=False,
-        device=device,
-        train=True,
-        batch_size=32
-    )
-
-    val_loader = create_wall_dataloader(
-        data_path="/scratch/DL24FA/train",
-        probing=False,
-        device=device,
-        train=False,
-        batch_size=32
-    )
-
-    probe_train_ds = create_wall_dataloader(
-        data_path="/scratch/DL24FA/probe_normal/train",
-        probing=True,
-        device=device,
-        train=True
-    )
-
-    probe_val = {
-        "normal": create_wall_dataloader(
-            data_path="/scratch/DL24FA/probe_normal/val",
-            probing=True,
-            device=device,
-            train=False
-        ),
-        "wall": create_wall_dataloader(
-            data_path="/scratch/DL24FA/probe_wall/val",
-            probing=True,
-            device=device,
-            train=False
-        )
-    }
-
-    model = VicRegJEPA()
-    model.repr_dim = 256
-
-    trained_model = train_jepa(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        probe_train_ds=probe_train_ds,
-        probe_val_ds=probe_val,
-        num_epochs=6,
-        initial_lr=2e-4,
-        device=device,
-        save_path="checkpoints"
-    )
-
-    evaluate_model(device, trained_model, probe_train_ds, probe_val_ds)
-
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train", action="store_true", help="train model and save .pth file")
+    parser.add_argument("--local", action="store_true", help="run on OS X")
+    parser.add_argument("--test", action="store_true", help="test mode")
+    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs (default: 1)")
+    args = parser.parse_args()
+
+    num_epochs = args.epochs
+    train_only = args.train
+    local = args.local
+    test_mode = args.test
+    learning_rate = 1e-4
+    repr_dim = 256
+
+    device = get_device(local=local)
+    print(f'Epochs = {num_epochs}')
+    print(f'Local execution = {local}')
+    print(f'Learning rate = {learning_rate}')
+    print(f'Representation dimension = {repr_dim}')
+
+    if train_only:
+        print('Training VicReg model')
+        model = VicRegJEPA(device=device, repr_dim=repr_dim, training=True).to(device)
+        train_loader = load_training_data(device=device, local=local)
+
+        predicted_states, target_states = train_vicreg_model(
+            model=model,
+            train_loader=train_loader,
+            num_epochs=num_epochs,
+            learning_rate=learning_rate,
+            device=device,
+            test_mode=test_mode,
+        )
+        print()
+        print('Saving VicReg model in best_model.pth')
+        torch.save(model.state_dict(), "best_model.pth")
+
+    else:
+        # evaluate the model
+        print('Evaluating best_model.pth')
+        probe_train_ds, probe_val_ds = load_data(device, local=local)
+        model = load_model(device=device, local=local)
+        evaluate_model(device, model, probe_train_ds, probe_val_ds)
 
 '''if __name__ == "__main__":
     main()
