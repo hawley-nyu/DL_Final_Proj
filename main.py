@@ -13,7 +13,7 @@ from tqdm import tqdm
 from models import VicRegJEPA
 from torch.utils.data import DataLoader, random_split
 
-from VicRegJEPA_Train import train_jepa
+from VicRegJEPA_Train import train_vicreg
 from dataclasses import dataclass
 
 def get_device():
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     if train_only:
         print('Training VicReg model')
-        model = VicRegJEPA(device=device, repr_dim=repr_dim, training=True).to(device)
+        model = train_vicreg(device=device, repr_dim=repr_dim, training=True).to(device)
         train_loader = load_training_data(device=device, local=local)
 
         predicted_states, target_states = train_vicreg_model(
