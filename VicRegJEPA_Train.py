@@ -40,9 +40,8 @@ def validate_model(model, val_loader, probe_train_ds, probe_val_ds, device):
 
     with torch.no_grad():
         for batch in val_loader:
-            states, actions = batch
-            states = states.to(device)
-            actions = actions.to(device)
+            states = batch[0].to(device)  # 假设states是第一个元素
+            actions = batch[1].to(device) if len(batch) > 1 else None  # 假设actions是第二个元素
 
             predictions, targets = model(states=states, actions=actions, training=True)
             loss = model.loss(predictions, targets)
@@ -92,6 +91,11 @@ def train_vicreg(
     best_val_loss = float('inf')
     best_probe_loss = float('inf')
 
+    for batch in train_loader:
+        print("Batch type:", type(batch))
+        print("Batch contents:", batch)
+        break
+
     for epoch in range(num_epochs):
         model.train()
         total_train_loss = 0
@@ -100,10 +104,8 @@ def train_vicreg(
         with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}") as pbar:
             for batch_idx, batch in enumerate(pbar):
                 optimizer.zero_grad()
-                # 修改这里：假设batch是一个tuple，包含states和actions
-                states, actions = batch
-                states = states.to(device)
-                actions = actions.to(device)
+                states = batch[0].to(device)
+                actions = batch[1].to(device) if len(batch) > 1 else None  # 假设actions是第二个元素
 
                 predictions, targets = model(states=states, actions=actions, training=True)
                 loss = model.loss(predictions, targets)
