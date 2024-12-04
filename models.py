@@ -36,8 +36,7 @@ class MockModel(torch.nn.Module):
         Output:
             predictions: [B, T, D]
         """
-        r = torch.randn((self.bs, self.n_steps, self.repr_dim)).to(self.device)
-        return r
+        return torch.randn((self.bs, self.n_steps, self.repr_dim)).to(self.device)
 
 
 class Prober(torch.nn.Module):
