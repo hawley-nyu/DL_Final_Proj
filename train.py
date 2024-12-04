@@ -39,7 +39,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
             count = count + 1
             if test_mode and count > 10:
                 return predicted_states, target_states
-            if plot and count%2 == 0:
+            if plot and count%200 == 0:
                plot_state_norms(predicted_states, target_states)
                plot_gradient_norms(gradient_norms)
 
