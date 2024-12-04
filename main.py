@@ -93,52 +93,39 @@ def evaluate_model(device, model, probe_train_ds, probe_val_ds):
     model = load_model()
     evaluate_model(device, model, probe_train_ds, probe_val_ds)'''
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--train", action="store_true", help="train model and save .pth file")
-    parser.add_argument("--local", action="store_true", help="run on OS X")
-    parser.add_argument("--test", action="store_true", help="test mode")
-    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs (default: 1)")
-    args = parser.parse_args()
-
-    num_epochs = args.epochs
-    train_only = args.train
-    local = args.local
-    test_mode = args.test
+    # Configuration
+    num_epochs = 6
     learning_rate = 1e-4
     repr_dim = 256
 
-    device = get_device(local=local)
+    device = get_device()
+    print(f'Configuration:')
     print(f'Epochs = {num_epochs}')
-    print(f'Local execution = {local}')
     print(f'Learning rate = {learning_rate}')
     print(f'Representation dimension = {repr_dim}')
 
-    if train_only:
-        print('Training VicReg model')
-        model = train_vicreg(device=device, repr_dim=repr_dim, training=True).to(device)
-        train_loader = load_training_data(device=device, local=local)
+    # Training
+    print('Training VicReg model')
+    model = VicRegJEPA(device=device, repr_dim=repr_dim, training=True).to(device)
+    train_loader = load_training_data(device=device)
+    val_loader = load_training_data(device=device)  # Using same data for validation
+    probe_train_ds, probe_val_ds = load_data(device)
 
-        predicted_states, target_states = train_vicreg_model(
-            model=model,
-            train_loader=train_loader,
-            num_epochs=num_epochs,
-            learning_rate=learning_rate,
-            device=device,
-            test_mode=test_mode,
-        )
-        print()
-        print('Saving VicReg model in best_model.pth')
-        torch.save(model.state_dict(), "best_model.pth")
+    model = train_vicreg(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        probe_train_ds=probe_train_ds,
+        probe_val_ds=probe_val_ds,
+        num_epochs=num_epochs,
+        initial_lr=learning_rate,
+        device=device,
+        save_path="checkpoints"
+    )
 
-    else:
-        # evaluate the model
-        print('Evaluating best_model.pth')
-        probe_train_ds, probe_val_ds = load_data(device, local=local)
-        model = load_model(device=device, local=local)
-        evaluate_model(device, model, probe_train_ds, probe_val_ds)
-
+    print('Evaluating model')
+    evaluate_model(device, model, probe_train_ds, probe_val_ds)
 '''if __name__ == "__main__":
     main()
     model = VicRegJEPA().to(device)
