@@ -14,7 +14,8 @@ from models import VicRegJEPA
 from torch.utils.data import DataLoader, random_split
 
 from VicRegJEPA_Train import train_vicreg
-from dataclasses import dataclass
+import argparse
+
 
 def get_device():
     """Check for GPU availability."""
