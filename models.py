@@ -91,9 +91,10 @@ class LowEnergyTwoModel(nn.Module):
         trajectory = states[:,:,0:1,:,:].clone() # first channel
         wall = states[:,:,1:,:,:].clone() # second channel
         encoded_states = self.encoder(trajectory[:,:1]) # only needs to encode the initial state
-        first_wall_state = wall[:, :1]
-        first_wall_state.zero_()
-        encoded_wall = self.wall_encoder(first_wall_state) # only needs to encode the initial state
+        #first_wall_state = wall[:, :1]
+        #first_wall_state.zero_()
+        #encoded_wall = self.wall_encoder(first_wall_state) # only needs to encode the initial state
+        encoded_wall = self.wall_encoder(wall[:, :1]) # only needs to encode the initial state
 
         predicted_states = []
         predicted_states.append(encoded_states[:,0])
@@ -169,14 +170,14 @@ class Predictor(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(repr_dim + action_dim + wall_dim, repr_dim * 2),
+            nn.Linear(repr_dim + action_dim, repr_dim * 2),
             nn.ReLU(),
             nn.Linear(repr_dim * 2, repr_dim)
         )
     
     def forward(self, state, action, wall):
         action = self.action_embedding(action)
-        x = torch.cat([state, action, wall.squeeze(1)], dim=1)
+        x = torch.cat([state, action], dim=1)
         x = self.fc(x)
         return x
 
