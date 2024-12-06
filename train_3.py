@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 import torchvision.transforms as T
+from torchvision.transforms import ToPILImage
 
 
 # Gaussian Noise
@@ -28,7 +29,7 @@ def augment(x):
     for i in range(B * T):
         frame = x_reshaped[i]  # [C,H,W]
         # use PIL for transforms
-        frame_pil = T.ToPILImage()(frame)
+        frame_pil = ToPILImage()(frame)
         # randomly flip
         frame_aug = augment_transforms(frame_pil)
         # back to Tensor
