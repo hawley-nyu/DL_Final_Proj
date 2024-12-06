@@ -178,6 +178,11 @@ class LowEnergyTwoModel(nn.Module):
 
     def byol_loss(self, online_states, target_states):
 
+        # online_states, target_states: [B,T,C,H,W]
+        # keep 1 channel
+        online_states = online_states[:, :, 0:1, :, :]  # now [B,T,1,H,W]
+        target_states = target_states[:, :, 0:1, :, :]  # now [B,T,1,H,W]
+
         with torch.no_grad():
             # target path
             t_repr = self.target_encoder(target_states)  # [B,T,repr_dim]
