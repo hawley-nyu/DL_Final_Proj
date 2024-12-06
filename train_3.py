@@ -41,6 +41,8 @@ def augment(x):
     augmented = torch.stack(augmented_frames, dim=0)
     # reshape back to [B,T,C,H,W]
     augmented = augmented.view(B, T, C, H, W)
+    augmented = augmented.to(device)
+
     return augmented
 
 
