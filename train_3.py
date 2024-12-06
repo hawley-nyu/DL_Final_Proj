@@ -7,36 +7,76 @@ import torchvision.transforms as T
 from torchvision.transforms import ToTensor, ToPILImage
 
 
-# Gaussian Noise
-def add_gaussian_noise(img, mean=0., std=0.01):
-    # img: [C,H,W]
-    noise = torch.randn_like(img) * std + mean
-    return img + noise
+class BatchAugmenter:
+    def __init__(self, device: str = 'cuda', batch_size: int = 32, noise_std: float = 0.01):
+        self.device = device
+        self.batch_size = batch_size
+        self.noise_std = noise_std
+
+        # Initialize transforms
+        self.augment_transforms = T.Compose([
+            T.RandomHorizontalFlip(p=0.5),
+        ])
+        self.to_tensor = ToTensor()
+        self.to_pil = ToPILImage()
+
+    @torch.no_grad()  # Disable gradient computation for efficiency
+    def add_gaussian_noise(self, img: torch.Tensor) -> torch.Tensor:
+        """Add Gaussian noise to a batch of images efficiently."""
+        noise = torch.randn_like(img, device=self.device) * self.noise_std
+        return img + noise
+
+    @torch.no_grad()
+    def process_batch(self, batch: torch.Tensor) -> torch.Tensor:
+        """Process a batch of frames efficiently."""
+        augmented = []
+        for frame in batch:
+            # Convert to PIL and apply transforms
+            frame_pil = self.to_pil(frame.cpu())
+            frame_aug = self.augment_transforms(frame_pil)
+            # Convert back to tensor
+            frame_tensor = self.to_tensor(frame_aug).to(self.device)
+            augmented.append(frame_tensor)
+
+        # Stack batch results
+        augmented = torch.stack(augmented, dim=0)
+        # Add noise to entire batch at once
+        augmented = self.add_gaussian_noise(augmented)
+        return augmented
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Augment a batch of sequences efficiently.
+        Args:
+            x: Input tensor of shape [B, T, C, H, W]
+        Returns:
+            Augmented tensor of same shape
+        """
+        B, T, C, H, W = x.shape
+        x_reshaped = x.view(B * T, C, H, W)
+        total_frames = B * T
+        augmented_frames = []
+
+        # Process in batches
+        for start_idx in range(0, total_frames, self.batch_size):
+            end_idx = min(start_idx + self.batch_size, total_frames)
+            batch = x_reshaped[start_idx:end_idx]
+            aug_batch = self.process_batch(batch)
+            augmented_frames.append(aug_batch)
+
+        # Combine all batches and reshape
+        augmented = torch.cat(augmented_frames, dim=0)
+        augmented = augmented.view(B, T, C, H, W)
+
+        return augmented
 
 
-# flip
-augment_transforms = T.Compose([
-    T.RandomHorizontalFlip(p=0.5),  # 50% chance flip
-])
-
-to_tensor = ToTensor()
-to_pil = ToPILImage()
-
-def augment(x,device='cuda'):
-    # x: [B, T, C, H, W]
-    B, T, C, H, W = x.shape
-    x_reshaped = x.view(B * T, C, H, W)
-
-    augmented_frames = []
-    for i in range(B * T):
-        frame = x_reshaped[i]  # [C,H,W] tensor
-        # Debug: print(frame.shape, frame.dtype)
-        frame_pil = to_pil(frame)  # PIL image
-        frame_aug = augment_transforms(frame_pil)  # flip
-        frame_aug = to_tensor(frame_aug)  # back to Tensor
-        frame_aug = add_gaussian_noise(frame_aug, mean=0., std=0.01)
-        augmented_frames.append(frame_aug)
-
+def augment(x: torch.Tensor, device: str = 'cuda', batch_size: Optional[int] = 32) -> torch.Tensor:
+    """
+    Wrapper function for backwards compatibility
+    """
+    augmenter = BatchAugmenter(device=device, batch_size=batch_size)
+    return augmenter(x)
     # get to [B*T,C,H,W]
     augmented = torch.stack(augmented_frames, dim=0)
     # reshape back to [B,T,C,H,W]
@@ -46,23 +86,15 @@ def augment(x,device='cuda'):
     return augmented
 
 
-def get_subsequences(data, seq_len):
-    """
-    Generates all possible subsequences of length seq_len from the input data.
-    Args:
-        data (Tensor): Input tensor of shape (B, T, ...).
-        seq_len (int): Desired sequence length.
-    Returns:
-        Tensor: Subsequence tensor of shape (B * num_slices, seq_len, ...).
-    """
+def get_subsequences(data, seq_len, max_slices=None):
     B, T = data.shape[:2]
-    num_slices = T - seq_len + 1
+    num_slices = min(T - seq_len + 1, max_slices) if max_slices else T - seq_len + 1
     slices = []
     for b in range(B):
         for i in range(num_slices):
             slices.append(data[b, i:i + seq_len])
     new_data = torch.stack(slices, dim=0)
-    return new_data  # shape (B * num_slices, seq_len, ...)
+    return new_data
 
 
 def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate=1e-4, device="cuda", test_mode=False):
