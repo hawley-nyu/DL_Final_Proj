@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
+import torchvision.transforms as T
 from torchvision.transforms import ToTensor, ToPILImage
 
 
