@@ -7,6 +7,7 @@ import torchvision.transforms as T
 from torchvision.transforms import ToTensor, ToPILImage
 from typing import Optional, Tuple
 import gc
+import psutil
 
 
 class BatchAugmenter:
@@ -156,10 +157,17 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 del loss_pred, loss_byol, loss_total, view1, view2
                 del predicted_states, target_states, encoded_wall
 
-            if batch_idx % 10 == 0:
-                torch.cuda.empty_cache()
-                gc.collect()
 
+            if batch_idx % 10 == 0:
+                # GPU
+                gpu_memory = torch.cuda.memory_allocated(device=device) / 1024 ** 2
+                # CPU
+                process = psutil.Process()
+                cpu_memory = process.memory_info().rss / 1024 ** 2
+
+                print(f'Batch {batch_idx}:')
+                print(f'    GPU memory allocated: {gpu_memory:.2f}MB')
+                print(f'    CPU memory used: {cpu_memory:.2f}MB')
             progress_bar.update(1)
 
         print(f"Epoch {epoch + 1}, Loss: {epoch_loss / len(train_loader):.10f}")
@@ -167,5 +175,8 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
         # each epoch reset memory
         torch.cuda.empty_cache()
         gc.collect()
+
+        print(f'End of epoch {epoch+1}, GPU memory allocated: {torch.cuda.memory_allocated(device=device)/1024**2:.2f}MB')
+        print(f'End of epoch {epoch+1}, GPU memory reserved: {torch.cuda.memory_reserved(device=device)/1024**2:.2f}MB')
 
     return predicted_states, target_states
