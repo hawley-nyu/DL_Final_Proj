@@ -37,9 +37,9 @@ class WallDataset:
             actions = torch.from_numpy(self.actions[i]).float().to(self.device)
             locations = torch.from_numpy(self.locations[i]).float().to(self.device)
         else:
-            states = torch.from_numpy(self.states[i]).float().to(self.device)
-            actions = torch.from_numpy(self.actions[i]).float().to(self.device)
-            locations = torch.empty(0).to(self.device)
+            states = torch.from_numpy(self.states[i]).float()
+            actions = torch.from_numpy(self.actions[i]).float()
+            locations = torch.empty(0)
 
         return WallSample(states=states, locations=locations, actions=actions)
 
