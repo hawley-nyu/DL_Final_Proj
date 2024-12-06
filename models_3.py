@@ -176,32 +176,33 @@ class LowEnergyTwoModel(nn.Module):
         wall_var_loss = F.relu(1e-2 - encoded_wall.var(dim=0).mean())
         return mse_loss + var_loss + wall_var_loss#+ cov_loss #+ .1*contrastive
 
-    def byol_loss(self, online_states, target_states):
+    def byol_loss(self, view1, view2):
 
-        # online_states, target_states: [B,T,C,H,W]
+        # view1, view2: [B,T,C,H,W]
         # keep 1 channel
-        online_states = online_states[:, :, 0:1, :, :]  # now [B,T,1,H,W]
-        target_states = target_states[:, :, 0:1, :, :]  # now [B,T,1,H,W]
+        view1 = view1[:, :, 0:1, :, :]  # now [B,T,1,H,W]
+        view2 = view2[:, :, 0:1, :, :]  # now [B,T,1,H,W]
 
         with torch.no_grad():
             # target path
-            t_repr = self.target_encoder(target_states)  # [B,T,repr_dim]
+            t_repr = self.target_encoder(view2)  # [B,T,repr_dim]
             t_proj = self.target_projection_head(t_repr)  # [B,T,repr_dim]
 
         # online path
-        o_repr = self.encoder(online_states)  # [B,T,repr_dim]
+        o_repr = self.encoder(view1)  # [B,T,repr_dim]
         o_proj = self.projection_head(o_repr)  # [B,T,repr_dim]
         o_pred = self.byol_predictor_head(o_proj)  # [B,T,repr_dim]
 
         # Bidirectional loss
         t_pred = self.byol_predictor_head(t_proj)
 
-        forward_loss = 2 - 2 * F.cosine_similarity(o_pred, t_proj, dim=-1).mean()
+        forward_loss = 2 - 2 * F.cosine_similarity(o_pred, t_proj.detach(), dim=-1).mean()
         backward_loss = 2 - 2 * F.cosine_similarity(t_pred, o_proj.detach(), dim=-1).mean()
 
         loss = forward_loss + backward_loss
 
         return loss
+
 
 class Encoder(nn.Module):
     def __init__(self, input_shape, repr_dim=256):
