@@ -181,10 +181,5 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
 
             torch.cuda.empty_cache()
             gc.collect()
-            process = psutil.Process()
-            print(f'End of epoch {epoch + 1}:')
-            print(f'    GPU memory allocated: {torch.cuda.memory_allocated(device=device) / 1024 ** 2:.2f}MB')
-            print(f'    GPU memory reserved: {torch.cuda.memory_reserved(device=device) / 1024 ** 2:.2f}MB')
-            print(f'    CPU memory used: {process.memory_info().rss / 1024 ** 2:.2f}MB')
 
         return predicted_states, target_states
