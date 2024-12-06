@@ -6,6 +6,7 @@ from tqdm import tqdm
 import torchvision.transforms as T
 from torchvision.transforms import ToTensor, ToPILImage
 from typing import Optional, Tuple
+import gc
 
 
 class BatchAugmenter:
@@ -125,7 +126,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
             actions_subseq = get_subsequences(actions, seq_len_actions)  # [B * num_slices, seq_len_actions, action_dim]
 
             batch_size = states_subseq.shape[0]
-            mini_batch_size = 128  # Adjust based on your GPU memory
+            mini_batch_size = 32  # Adjust based on your GPU memory
 
             for i in range(0, batch_size, mini_batch_size):
                 states_mini = states_subseq[i:i + mini_batch_size]
@@ -149,10 +150,28 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
 
                 # Update target NN with EMA
                 model.update_target_network()
+                #release unneeded paras
+                del loss_pred, loss_byol, loss_total, view1, view2
+
 
                 epoch_loss += loss_total.item()
+            if batch_idx % 10 == 0:  # 每10个batch清理一次
+                torch.cuda.empty_cache()
+                gc.collect()
+
+                # test memory
+                print(
+                    f'Batch {batch_idx}, GPU memory allocated: {torch.cuda.memory_allocated(device=device) / 1024 ** 2:.2f}MB')
 
             progress_bar.update(1)
 
         print(f"Epoch {epoch + 1}, Loss: {epoch_loss / len(train_loader):.10f}")
+
+        # each epoch reset memory
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        print(f'End of epoch {epoch+1}, GPU memory allocated: {torch.cuda.memory_allocated(device=device)/1024**2:.2f}MB')
+        print(f'End of epoch {epoch+1}, GPU memory reserved: {torch.cuda.memory_reserved(device=device)/1024**2:.2f}MB')
+
     return predicted_states, target_states

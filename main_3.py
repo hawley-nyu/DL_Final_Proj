@@ -28,6 +28,7 @@ def load_training_data(device, local=False):
         probing=False,
         device=device,
         train=True,
+        batch_size=32,
     )
 
     return train_ds
