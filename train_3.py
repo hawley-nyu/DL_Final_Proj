@@ -117,7 +117,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
         model.train()
         epoch_loss = 0.0
 
-        for batch in train_loader:
+        for batch_idx, batch in enumerate(train_loader):
             states = batch.states.to(device)  # [B, T+1, Ch, H, W]
             actions = batch.actions.to(device)  # [B, T, action_dim]
 
@@ -156,7 +156,7 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 del loss_pred, loss_byol, loss_total, view1, view2
                 del predicted_states, target_states, encoded_wall
 
-            if batch_idx % 10 == 0:  # 每10个batch清理一次
+            if batch_idx % 10 == 0:
                 torch.cuda.empty_cache()
                 gc.collect()
 
