@@ -160,10 +160,6 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 torch.cuda.empty_cache()
                 gc.collect()
 
-                # test memory
-                print(
-                    f'Batch {batch_idx}, GPU memory allocated: {torch.cuda.memory_allocated(device=device) / 1024 ** 2:.2f}MB')
-
             progress_bar.update(1)
 
         print(f"Epoch {epoch + 1}, Loss: {epoch_loss / len(train_loader):.10f}")
@@ -171,8 +167,5 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
         # each epoch reset memory
         torch.cuda.empty_cache()
         gc.collect()
-
-        print(f'End of epoch {epoch+1}, GPU memory allocated: {torch.cuda.memory_allocated(device=device)/1024**2:.2f}MB')
-        print(f'End of epoch {epoch+1}, GPU memory reserved: {torch.cuda.memory_reserved(device=device)/1024**2:.2f}MB')
 
     return predicted_states, target_states
