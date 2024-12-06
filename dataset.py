@@ -17,7 +17,7 @@ class WallDataset:
         device="cuda",
     ):
         self.device = device
-        self.states = np.load(f"{data_path}/states.npy", mmap_mode="r")
+        self.states = np.load(f"{data_path}/states.npy") #, mmap_mode="r")
         self.actions = np.load(f"{data_path}/actions.npy")
 
         if probing:
@@ -29,11 +29,11 @@ class WallDataset:
         return len(self.states)
 
     def __getitem__(self, i):
-        states = torch.from_numpy(self.states[i]).float().to(self.device)
-        actions = torch.from_numpy(self.actions[i]).float().to(self.device)
+        states = torch.from_numpy(self.states[i]).float()#.to(self.device)
+        actions = torch.from_numpy(self.actions[i]).float()#.to(self.device)
 
         if self.locations is not None:
-            locations = torch.from_numpy(self.locations[i]).float().to(self.device)
+            locations = torch.from_numpy(self.locations[i]).float()#.to(self.device)
         else:
             locations = torch.empty(0).to(self.device)
 
@@ -58,7 +58,8 @@ def create_wall_dataloader(
         batch_size,
         shuffle=train,
         drop_last=True,
-        pin_memory=False,
+        pin_memory=True,
+        num_workers=False,
     )
 
     return loader
