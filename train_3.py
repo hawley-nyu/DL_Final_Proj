@@ -22,7 +22,7 @@ augment_transforms = T.Compose([
 to_tensor = ToTensor()
 to_pil = ToPILImage()
 
-def augment(x):
+def augment(x,device='cuda'):
     # x: [B, T, C, H, W]
     B, T, C, H, W = x.shape
     x_reshaped = x.view(B * T, C, H, W)
