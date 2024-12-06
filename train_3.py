@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import torchvision.transforms as T
 from torchvision.transforms import ToTensor, ToPILImage
+from typing import Optional, Tuple
 
 
 class BatchAugmenter:
@@ -77,14 +78,6 @@ def augment(x: torch.Tensor, device: str = 'cuda', batch_size: Optional[int] = 3
     """
     augmenter = BatchAugmenter(device=device, batch_size=batch_size)
     return augmenter(x)
-    # get to [B*T,C,H,W]
-    augmented = torch.stack(augmented_frames, dim=0)
-    # reshape back to [B,T,C,H,W]
-    augmented = augmented.view(B, T, C, H, W)
-    augmented = augmented.to(device)
-
-    return augmented
-
 
 def get_subsequences(data, seq_len, max_slices=None):
     B, T = data.shape[:2]
