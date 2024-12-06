@@ -128,13 +128,15 @@ class LowEnergyTwoModel(nn.Module):
         flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
         return mse_loss + var_loss
 
-   def initialize_weights(self, module):
-       if isinstance(module, nn.Conv2d):
-           init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-       elif isinstance(module, nn.Linear):
-           init.xavier_uniform_(module.weight)
-       if module.bias is not None:
-           init.constant_(module.bias, 0)
+    def initialize_weights(self, module):
+        if isinstance(module, nn.Conv2d):
+            init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            if module.bias is not None:
+                init.constant_(module.bias, 0)
+        elif isinstance(module, nn.Linear):
+            init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                init.constant_(module.bias, 0)
 
 class Encoder(nn.Module):
     def __init__(self, input_shape, repr_dim=256):
