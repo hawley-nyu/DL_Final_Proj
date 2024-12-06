@@ -71,7 +71,7 @@ class Prober(torch.nn.Module):
 
 class LowEnergyTwoModel(nn.Module):
 
-    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256, training=False):
+    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256, training=False, momentum=0.99):
         super().__init__()
         self.encoder = Encoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
         self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
@@ -177,13 +177,7 @@ class LowEnergyTwoModel(nn.Module):
         return mse_loss + var_loss + wall_var_loss#+ cov_loss #+ .1*contrastive
 
     def byol_loss(self, online_states, target_states):
-        """
-        BYOL中需要两种不同增强(view1和view2)的状态作为输入，分为online和target两路:
-        - online: encoder + projection_head + predictor_head
-        - target: target_encoder + target_projection_head (no grad)
 
-        online_states, target_states是两种不同增强后的相同batch的状态序列。
-        """
         with torch.no_grad():
             # target path
             t_repr = self.target_encoder(target_states)  # [B,T,repr_dim]
