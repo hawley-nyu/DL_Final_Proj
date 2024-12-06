@@ -158,25 +158,33 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 del predicted_states, target_states, encoded_wall
 
 
-            if batch_idx % 10 == 0:
-                # GPU
+            if batch_idx % 500 == 0:
+                # GPU memory
                 gpu_memory = torch.cuda.memory_allocated(device=device) / 1024 ** 2
-                # CPU
+                # CPU memory
                 process = psutil.Process()
                 cpu_memory = process.memory_info().rss / 1024 ** 2
 
                 print(f'Batch {batch_idx}:')
                 print(f'    GPU memory allocated: {gpu_memory:.2f}MB')
                 print(f'    CPU memory used: {cpu_memory:.2f}MB')
+
+                # CPU memory control
+                if cpu_memory > 20000:
+                    print("High CPU memory usage detected, cleaning...")
+                    gc.collect()
+                    del states_subseq, actions_subseq
+                    cpu_memory_after = process.memory_info().rss / 1024 ** 2
+                    print(f'    CPU memory after cleanup: {cpu_memory_after:.2f}MB')
+
             progress_bar.update(1)
 
-        print(f"Epoch {epoch + 1}, Loss: {epoch_loss / len(train_loader):.10f}")
+            torch.cuda.empty_cache()
+            gc.collect()
+            process = psutil.Process()
+            print(f'End of epoch {epoch + 1}:')
+            print(f'    GPU memory allocated: {torch.cuda.memory_allocated(device=device) / 1024 ** 2:.2f}MB')
+            print(f'    GPU memory reserved: {torch.cuda.memory_reserved(device=device) / 1024 ** 2:.2f}MB')
+            print(f'    CPU memory used: {process.memory_info().rss / 1024 ** 2:.2f}MB')
 
-        # each epoch reset memory
-        torch.cuda.empty_cache()
-        gc.collect()
-
-        print(f'End of epoch {epoch+1}, GPU memory allocated: {torch.cuda.memory_allocated(device=device)/1024**2:.2f}MB')
-        print(f'End of epoch {epoch+1}, GPU memory reserved: {torch.cuda.memory_reserved(device=device)/1024**2:.2f}MB')
-
-    return predicted_states, target_states
+        return predicted_states, target_states
