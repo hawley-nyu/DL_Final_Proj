@@ -3,8 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
-import torchvision.transforms as T
-from torchvision.transforms import ToPILImage
+from torchvision.transforms import ToTensor, ToPILImage
 
 
 # Gaussian Noise
@@ -19,6 +18,8 @@ augment_transforms = T.Compose([
     T.RandomHorizontalFlip(p=0.5),  # 50% chance flip
 ])
 
+to_tensor = ToTensor()
+to_pil = ToPILImage()
 
 def augment(x):
     # x: [B, T, C, H, W]
@@ -27,16 +28,12 @@ def augment(x):
 
     augmented_frames = []
     for i in range(B * T):
-        frame = x_reshaped[i]  # [C,H,W]
-        # use PIL for transforms
-        frame_pil = ToPILImage()(frame)
-        # randomly flip
-        frame_aug = augment_transforms(frame_pil)
-        # back to Tensor
-        frame_aug = T.ToTensor()(frame_aug)
-        # Add noise
+        frame = x_reshaped[i]  # [C,H,W] tensor
+        # Debug: print(frame.shape, frame.dtype)
+        frame_pil = to_pil(frame)  # PIL image
+        frame_aug = augment_transforms(frame_pil)  # flip
+        frame_aug = to_tensor(frame_aug)  # back to Tensor
         frame_aug = add_gaussian_noise(frame_aug, mean=0., std=0.01)
-
         augmented_frames.append(frame_aug)
 
     # get to [B*T,C,H,W]
