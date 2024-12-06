@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from evaluator import ProbingEvaluator
+from evaluator import ProbingEvaluator, ProbingConfig  
 
 class EarlyStopping:
     def __init__(self, patience=3, min_delta=0, verbose=False):

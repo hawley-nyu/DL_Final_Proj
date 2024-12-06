@@ -1,0 +1,303 @@
+from typing import List
+import numpy as np
+from torch import nn
+from torch.nn import functional as F
+import torch
+
+
+def build_mlp(layers_dims: List[int]):
+    layers = []
+    for i in range(len(layers_dims) - 2):
+        layers.append(nn.Linear(layers_dims[i], layers_dims[i + 1]))
+        layers.append(nn.BatchNorm1d(layers_dims[i + 1]))
+        layers.append(nn.ReLU(True))
+    layers.append(nn.Linear(layers_dims[-2], layers_dims[-1]))
+    return nn.Sequential(*layers)
+
+
+class MockModel(torch.nn.Module):
+    """
+    Does nothing. Just for testing.
+    """
+
+    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256):
+        super().__init__()
+        self.device = device
+        self.bs = bs
+        self.n_steps = n_steps
+        self.repr_dim = 256
+
+    def forward(self, states, actions):
+        """
+        Args:
+            During training:
+                states: [B, T, Ch, H, W]
+            During inference:
+                states: [B, 1, Ch, H, W]
+            actions: [B, T-1, 2]
+
+        Output:
+            predictions: [B, T, D]
+        """
+        r = torch.randn((self.bs, self.n_steps, self.repr_dim)).to(self.device)
+        return r
+
+
+class Prober(torch.nn.Module):
+    def __init__(
+        self,
+        embedding: int,
+        arch: str,
+        output_shape: List[int],
+    ):
+        super().__init__()
+        self.output_dim = np.prod(output_shape)
+        self.output_shape = output_shape
+        self.arch = arch
+
+        arch_list = list(map(int, arch.split("-"))) if arch != "" else []
+        f = [embedding] + arch_list + [self.output_dim]
+        layers = []
+        for i in range(len(f) - 2):
+            layers.append(torch.nn.Linear(f[i], f[i + 1]))
+            layers.append(torch.nn.ReLU(True))
+        layers.append(torch.nn.Linear(f[-2], f[-1]))
+        self.prober = torch.nn.Sequential(*layers)
+
+    def forward(self, e):
+        output = self.prober(e)
+        return output
+
+
+class LowEnergyTwoModel(nn.Module):
+
+    def __init__(self, device="cuda", bs=64, n_steps=17, output_dim=256, repr_dim=256, training=False):
+        super().__init__()
+        self.encoder = Encoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
+        self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
+        self.target_encoder = TargetEncoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
+        self.wall_encoder = WallEncoder(input_shape=(1, 65, 65), repr_dim=128)
+        self.device = device
+        self.bs = bs
+        self.n_steps = n_steps
+        self.repr_dim = repr_dim
+        self.action_dim = 2
+        self.state_dim = (2, 64, 64)
+        self.output_dim = output_dim
+        self.training = training
+
+        # BYOL projection & Predictor
+        self.projection_head = nn.Sequential(
+            nn.Linear(repr_dim, repr_dim),
+            nn.ReLU(),
+            nn.Linear(repr_dim, repr_dim)
+        )
+        self.target_projection_head = nn.Sequential(
+            nn.Linear(repr_dim, repr_dim),
+            nn.ReLU(),
+            nn.Linear(repr_dim, repr_dim)
+        )
+        # predictor head for BYOL
+        self.byol_predictor_head = nn.Sequential(
+            nn.Linear(repr_dim, repr_dim),
+            nn.ReLU(),
+            nn.Linear(repr_dim, repr_dim)
+        )
+
+        # initialize
+        self._init_target_network()
+        self.momentum = momentum  # EMA update factor for BYOL
+
+    def _init_target_network(self):
+        # mathc target encoder and online encoder
+        for param, target_param in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+            target_param.data.copy_(param.data)
+            target_param.requires_grad = False
+
+        # match target projection head and online projection head
+        for param, target_param in zip(self.projection_head.parameters(), self.target_projection_head.parameters()):
+            target_param.data.copy_(param.data)
+            target_param.requires_grad = False
+
+    @torch.no_grad()
+    def update_target_network(self):
+        # update target encoder with EMA
+        for param, target_param in zip(self.encoder.parameters(), self.target_encoder.parameters()):
+            target_param.data = target_param.data * self.momentum + param.data * (1 - self.momentum)
+        for param, target_param in zip(self.projection_head.parameters(), self.target_projection_head.parameters()):
+            target_param.data = target_param.data * self.momentum + param.data * (1 - self.momentum)
+
+
+    def forward(self, states, actions):
+
+        bs, action_length, action_dim = actions.shape # (bs, 16, 2)
+        trajectory = states[:,:,0:1,:,:].clone() # first channel
+        wall = states[:,:,1:,:,:].clone() # second channel
+        encoded_states = self.encoder(trajectory[:,:1]) # only needs to encode the initial state
+        encoded_wall = self.wall_encoder(wall[:, :1]) # only needs to encode the initial state
+        encoded_target_states = None
+        if self.training:
+            encoded_target_states = self.target_encoder(trajectory[:, :-1])
+
+
+        predicted_states = []
+        predicted_states.append(encoded_states[:,0])
+        for i in range(action_length):
+            prediction = self.predictor(predicted_states[i], actions[:,i], encoded_wall) # (bs, 256)
+            predicted_states.append(prediction)
+        predicted_states = torch.stack(predicted_states, dim=1)  # (17, bs, 256)
+
+        return predicted_states, encoded_target_states, encoded_wall
+    
+
+
+    def contrastive_loss(self, predicted_states, target_states):
+        predicted_states = F.normalize(predicted_states, dim=-1)
+        target_states = F.normalize(target_states, dim=-1)
+        similarity = torch.matmul(predicted_states, target_states.transpose(-1, -2))
+        batch_size, seq_len, _ = predicted_states.size()
+        positive_pairs = torch.diagonal(similarity, offset=0, dim1=-1, dim2=-2).mean()
+        negative_pairs = similarity.mean() - positive_pairs
+        return -positive_pairs + negative_pairs
+
+    def loss(self, predicted_states, target_states, encoded_wall):
+        predicted_states = predicted_states[:, 1:]
+        mse_loss = F.mse_loss(predicted_states, target_states)
+        variance = target_states.var(dim=0).mean()
+        var_loss = F.relu(1e-2 - variance).mean()
+        B, T, repr_dim = target_states.size()
+        flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
+        cov = torch.cov(flattened_states.T)
+        #cov = torch.cov(target_states.T)
+        cov_loss = (cov.fill_diagonal_(0).pow(2).sum() / cov.size(0))
+        #contrastive = self.contrastive_loss(predicted_states, target_states)
+
+        # wall loss
+        wall_var_loss = F.relu(1e-2 - encoded_wall.var(dim=0).mean())
+        return mse_loss + var_loss + wall_var_loss#+ cov_loss #+ .1*contrastive
+
+    def byol_loss(self, online_states, target_states):
+        """
+        BYOL中需要两种不同增强(view1和view2)的状态作为输入，分为online和target两路:
+        - online: encoder + projection_head + predictor_head
+        - target: target_encoder + target_projection_head (no grad)
+
+        online_states, target_states是两种不同增强后的相同batch的状态序列。
+        """
+        with torch.no_grad():
+            # target path
+            t_repr = self.target_encoder(target_states)  # [B,T,repr_dim]
+            t_proj = self.target_projection_head(t_repr)  # [B,T,repr_dim]
+
+        # online path
+        o_repr = self.encoder(online_states)  # [B,T,repr_dim]
+        o_proj = self.projection_head(o_repr)  # [B,T,repr_dim]
+        o_pred = self.byol_predictor_head(o_proj)  # [B,T,repr_dim]
+
+        # Bidirectional loss
+        t_pred = self.byol_predictor_head(t_proj)
+
+        forward_loss = 2 - 2 * F.cosine_similarity(o_pred, t_proj, dim=-1).mean()
+        backward_loss = 2 - 2 * F.cosine_similarity(t_pred, o_proj.detach(), dim=-1).mean()
+
+        loss = forward_loss + backward_loss
+
+        return loss
+
+class Encoder(nn.Module):
+    def __init__(self, input_shape, repr_dim=256):
+        super().__init__()
+
+        # calculate linear layer input size
+        C, H, W = input_shape
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1
+        fc_input_dim = H * W * 64
+
+        self.cnn = nn.Sequential(
+            nn.Conv2d(C, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(fc_input_dim, repr_dim)
+        self.skip_fc = nn.Linear(C * input_shape[1] * input_shape[2], repr_dim)
+
+    
+    def forward(self, x):
+        #x[:, :, 0, :, :] *= 1000 # the numbers are really small
+        # x = x[:, :, 0:1, :, :] # copy trajectory channel over wall channel
+        
+        B, T, C, H, W = x.size()
+        y = x
+        x = x.contiguous().view(B * T, C, H, W)
+        x = self.cnn(x)
+        x = self.flatten(x)
+        x = self.fc(x)
+        x = x.view(B, T, -1) # [B, T, repr_dim]
+
+        # skip connection
+        y = y.contiguous().view(B * T, -1)  # [B * T, C * H * W]
+        y = self.skip_fc(y)
+        y = y.view(B, T, -1)  # Reshape back to [B, T, repr_dim]
+        
+        return x + y
+
+class Predictor(nn.Module):
+    def __init__(self, repr_dim=256, action_dim=32, wall_dim=128):
+        super().__init__()
+
+        self.action_embedding = nn.Sequential(
+            nn.Linear(2, action_dim),
+            nn.ReLU()
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(repr_dim + action_dim + wall_dim, repr_dim * 2),
+            # nn.Linear(repr_dim + action_dim, repr_dim * 2),
+            nn.ReLU(),
+            nn.Linear(repr_dim * 2, repr_dim)
+        )
+    
+    def forward(self, state, action, wall):
+        action = self.action_embedding(action)
+        x = torch.cat([state, action, wall.squeeze(1)], dim=1)
+        # x = torch.cat([state, action], dim=1)
+        x = self.fc(x)
+        return x
+
+class TargetEncoder(Encoder):
+    def __init__(self, input_shape, repr_dim=256):
+        super().__init__(input_shape, repr_dim)
+
+
+class WallEncoder(nn.Module):
+    def __init__(self, input_shape=(1, 65, 65), repr_dim=128):
+        super().__init__()
+
+        # Calculate linear layer input size
+        C, H, W = input_shape  # (C=1, H=65, W=65)
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1  # After first conv (stride=2)
+        H, W = (H - 1) // 2 + 1, (W - 1) // 2 + 1  # After second conv (stride=2)
+        fc_input_dim = H * W * 64  # Final flattened size
+
+        # Define CNN and fully connected layers
+        self.cnn = nn.Sequential(
+            nn.Conv2d(C, 32, kernel_size=3, stride=2, padding=1),  # Input channels = 1
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(fc_input_dim, repr_dim)  # Output size = 128
+
+    def forward(self, x):
+        # x = x[:, :, 1:, :, :] # copy trajectory channel over wall channel
+        B, T, C, H, W = x.size()  # Expect input shape (batch_size, 1, 1, 65, 65)
+        x = x.contiguous().view(B * T, C, H, W)  # Combine batch and time dimensions
+        x = self.cnn(x)  # Apply CNN
+        x = self.flatten(x)  # Flatten to (B*T, fc_input_dim)
+        x = self.fc(x)  # Apply fully connected layer
+        x = x.view(B, T, -1)  # Reshape to (batch_size, 1, repr_dim=128)
+        return x
