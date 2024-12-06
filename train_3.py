@@ -140,21 +140,22 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 view1 = augment(states_mini)
                 view2 = augment(states_mini)
                 loss_byol = model.byol_loss(view1, view2)
-
                 # Combine loss
                 loss_total = loss_pred + loss_byol
 
                 optimizer.zero_grad()
                 loss_total.backward()
                 optimizer.step()
-
                 # Update target NN with EMA
                 model.update_target_network()
+                # record loss and del paras
+                current_loss = loss_total.item()
+                epoch_loss += current_loss
+
                 #release unneeded paras
                 del loss_pred, loss_byol, loss_total, view1, view2
+                del predicted_states, target_states, encoded_wall
 
-
-                epoch_loss += loss_total.item()
             if batch_idx % 10 == 0:  # 每10个batch清理一次
                 torch.cuda.empty_cache()
                 gc.collect()
