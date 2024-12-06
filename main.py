@@ -1,4 +1,5 @@
 from dataset import create_wall_dataloader
+from dataset import create_training_wall_dataloader
 from evaluator import ProbingEvaluator
 from train import train_low_energy_two_model
 import torch
@@ -23,7 +24,7 @@ def load_training_data(device, local=False):
     else:
         data_path="/scratch/DL24FA/train"
 
-    train_ds = create_wall_dataloader(
+    train_ds = create_training_wall_dataloader(
         data_path=f"{data_path}",
         probing=False,
         device=device,
