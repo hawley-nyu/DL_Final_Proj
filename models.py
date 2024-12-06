@@ -3,6 +3,7 @@ import numpy as np
 from torch import nn
 from torch.nn import functional as F
 import torch
+import torch.nn.init as init
 
 
 def build_mlp(layers_dims: List[int]):
@@ -83,6 +84,8 @@ class LowEnergyTwoModel(nn.Module):
         self.state_dim = (2, 64, 64)
         self.output_dim = output_dim
         self.training = training
+
+        self.apply(self.initialize_weights)
     
     def forward(self, states, actions):
 
@@ -125,6 +128,13 @@ class LowEnergyTwoModel(nn.Module):
         flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
         return mse_loss + var_loss
 
+   def initialize_weights(self, module):
+       if isinstance(module, nn.Conv2d):
+           init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+       elif isinstance(module, nn.Linear):
+           init.xavier_uniform_(module.weight)
+       if module.bias is not None:
+           init.constant_(module.bias, 0)
 
 class Encoder(nn.Module):
     def __init__(self, input_shape, repr_dim=256):
