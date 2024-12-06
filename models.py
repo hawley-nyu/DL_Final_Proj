@@ -3,6 +3,7 @@ import numpy as np
 from torch import nn
 from torch.nn import functional as F
 import torch
+import torch.nn.init as init
 
 
 def build_mlp(layers_dims: List[int]):
@@ -84,6 +85,8 @@ class LowEnergyTwoModel(nn.Module):
         self.state_dim = (2, 64, 64)
         self.output_dim = output_dim
         self.training = training
+
+        self.apply(self.initialize_weights)
     
     def forward(self, states, actions):
 
@@ -91,9 +94,6 @@ class LowEnergyTwoModel(nn.Module):
         trajectory = states[:,:,0:1,:,:].clone() # first channel
         wall = states[:,:,1:,:,:].clone() # second channel
         encoded_states = self.encoder(trajectory[:,:1]) # only needs to encode the initial state
-        #first_wall_state = wall[:, :1]
-        #first_wall_state.zero_()
-        #encoded_wall = self.wall_encoder(first_wall_state) # only needs to encode the initial state
         encoded_wall = self.wall_encoder(wall[:, :1]) # only needs to encode the initial state
 
         predicted_states = []
@@ -121,6 +121,13 @@ class LowEnergyTwoModel(nn.Module):
         cov_loss = (cov.fill_diagonal_(0).pow(2).sum() / cov.size(0))
         return mse_loss + var_loss #+ cov_loss
 
+   def initialize_weights(self, module):
+       if isinstance(module, nn.Conv2d):
+           init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+       elif isinstance(module, nn.Linear):
+           init.xavier_uniform_(module.weight)
+       if module.bias is not None:
+           init.constant_(module.bias, 0)
 
 class Encoder(nn.Module):
     def __init__(self, input_shape, repr_dim=256):
