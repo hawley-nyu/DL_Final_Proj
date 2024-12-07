@@ -132,7 +132,7 @@ class LowEnergyTwoModel(nn.Module):
 
         # wall loss
         wall_var_loss = F.relu(1e-2 - encoded_wall.var(dim=0).mean())
-        return mse_loss + var_loss + wall_var_loss#+ cov_loss #+ .1*contrastive
+        return mse_loss + var_loss #+ wall_var_loss#+ cov_loss #+ .1*contrastive
 
 
 class Encoder(nn.Module):
