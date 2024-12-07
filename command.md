@@ -1,4 +1,4 @@
-srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu --time=01:00:00 --pty /bin/bash
+srun --account=csci_ga_2572-2024fa --partition=c12m85-a100-1 --gres=gpu --time=04:00:00 --pty /bin/bash
 srun --account=csci_ga_2572-2024fa --partition=n1s8-v100-1 --gres=gpu:v100:1 --time=04:00:00 --pty /bin/bash
 
 singularity exec --bind /scratch --nv --overlay /scratch/zg915/overlay-25GB-500K.ext3:rw /scratch/zg915/ubuntu-20.04.3.sif /bin/bash
