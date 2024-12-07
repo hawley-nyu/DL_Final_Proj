@@ -74,7 +74,6 @@ class LowEnergyTwoModel(nn.Module):
         super().__init__()
         self.encoder = Encoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
         self.predictor = Predictor(repr_dim=repr_dim, action_dim=2)
-        self.target_encoder = TargetEncoder(input_shape=(1, 65, 65), repr_dim=repr_dim)
         self.wall_encoder = WallEncoder(input_shape=(1, 65, 65), repr_dim=128)
         self.device = device
         self.bs = bs
@@ -117,9 +116,7 @@ class LowEnergyTwoModel(nn.Module):
         var_loss = F.relu(1e-2 - variance).mean()
         B, T, repr_dim = target_states.size()
         flattened_states = target_states.view(B * T, repr_dim)  # [B*T, repr_dim]
-        cov = torch.cov(flattened_states.T)
-        cov_loss = (cov.fill_diagonal_(0).pow(2).sum() / cov.size(0))
-        return mse_loss + var_loss #+ cov_loss
+        return mse_loss + var_loss
 
 
 class Encoder(nn.Module):
@@ -180,11 +177,6 @@ class Predictor(nn.Module):
         x = torch.cat([state, action, wall.squeeze(1)], dim=1)
         x = self.fc(x)
         return x
-
-class TargetEncoder(Encoder):
-    def __init__(self, input_shape, repr_dim=256):
-        super().__init__(input_shape, repr_dim)
-
 
 class WallEncoder(nn.Module):
     def __init__(self, input_shape=(1, 65, 65), repr_dim=128):

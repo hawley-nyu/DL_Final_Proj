@@ -106,7 +106,7 @@ if __name__ == "__main__":
     if train_only:
         print('Training low energy model')
         model = LowEnergyTwoModel(device=device, repr_dim=repr_dim, training=True).to(device)
-        train_loader = load_training_data(device=device) 
+        train_loader = load_training_data(device=device)
 
         predicted_states, target_states = train_low_energy_two_model(
             model=model,
@@ -121,11 +121,9 @@ if __name__ == "__main__":
         print('Saving low energy model in best_model.pth')
         torch.save(model.state_dict(), "best_model.pth")
 
-    else: 
+    else:
         # evaluate the model
         print('Evaluating best_model.pth')
         probe_train_ds, probe_val_ds = load_data(device)
         model = load_model()
         evaluate_model(device, model, probe_train_ds, probe_val_ds)
-
-
