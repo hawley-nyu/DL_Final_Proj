@@ -126,8 +126,7 @@ class ProbingEvaluator:
 
                 losses_list = []
 
-                #target = getattr(batch, "locations").cuda()
-                target = getattr(batch, "locations").to(self.device)
+                target = getattr(batch, "locations").cuda()
                 target = self.normalizer.normalize_location(target)
 
                 if (
@@ -151,8 +150,7 @@ class ProbingEvaluator:
                         sampled_target_locs[i, :] = target[i, indices]
 
                     pred_encs = sampled_pred_encs
-                    #target = sampled_target_locs.cuda()
-                    target = sampled_target_locs.to(device)
+                    target = sampled_target_locs.cuda()
 
                 pred_locs = torch.stack([prober(x) for x in pred_encs], dim=1)
                 losses = location_losses(pred_locs, target)
@@ -180,7 +178,6 @@ class ProbingEvaluator:
     def evaluate_all(
         self,
         prober,
-        device='cuda',
     ):
         """
         Evaluates on all the different validation datasets
@@ -192,7 +189,6 @@ class ProbingEvaluator:
                 prober=prober,
                 val_ds=val_ds,
                 prefix=prefix,
-                device=device,
             )
 
         return avg_losses
@@ -203,7 +199,6 @@ class ProbingEvaluator:
         prober,
         val_ds,
         prefix="",
-        device='cuda',
     ):
         quick_debug = self.quick_debug
         config = self.config
@@ -223,8 +218,7 @@ class ProbingEvaluator:
             # Make sure pred_encs has shape (T, BS, D) at this point
             ################################################################################
 
-            #target = getattr(batch, "locations").cuda()
-            target = getattr(batch, "locations").to(device)
+            target = getattr(batch, "locations").cuda()
             target = self.normalizer.normalize_location(target)
 
             pred_locs = torch.stack([prober(x) for x in pred_encs], dim=1)
