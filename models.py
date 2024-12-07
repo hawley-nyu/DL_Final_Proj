@@ -91,7 +91,7 @@ class LowEnergyTwoModel(nn.Module):
         trajectory = states[:,:,0:1,:,:].clone() # first channel
         wall = states[:,:,1:,:,:].clone() # second channel
         wall_max = wall.max()
-        wall_inverted = torch.where(wall == 0, max_value, torch.tensor(0, dtype=wall.dtype, device=wall.device))
+        wall_inverted = torch.where(wall == 0, wall_max, torch.tensor(0, dtype=wall.dtype, device=wall.device))
 
         encoded_states = self.encoder(trajectory[:,:1]) # only needs to encode the initial state
         encoded_wall = self.wall_encoder(wall_inverted[:, :1]) # only needs to encode the initial state
