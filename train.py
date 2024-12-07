@@ -72,8 +72,8 @@ def train_low_energy_two_model(model, train_loader, num_epochs=50, learning_rate
                 states_mini = states_subseq[i:i+mini_batch_size]
                 actions_mini = actions_subseq[i:i+mini_batch_size]
 
-                predicted_states, target_states, encoded_wall = model(states_mini, actions_mini)
-                loss = model.loss(predicted_states, target_states, encoded_wall)
+                predicted_states, target_states = model(states_mini, actions_mini)
+                loss = model.loss(predicted_states, target_states)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
